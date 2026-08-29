@@ -1,0 +1,181 @@
+COMMAND_INFO = {
+
+    "ping": {
+        "description": "check data transmission speed",
+        "usage": "duping",
+    },
+
+    "tup": {
+        "description": "use a bot to send messages on behalf of the user",
+        "usage": "dutup <content>",
+        "example": "dutup Hi there,this is SMF",
+        "permission": "Signed roles"
+    },
+
+    "patchup": {
+        "description": "Write the bot's edit log",
+        "usage": "patchup <Title> / <Content> / <Note>",
+        "example": "patchup SMF 1.0 / SMF is a ... / Do not take advantage",
+        "permission": "the owners of DSA"
+    },
+
+    "ban": {
+        "description": "make someone disappear from the server and prevent them from rejoining",
+        "usage": "duban @user <reason>",
+        "example": "duban @ragebaitkid for ragebait ",
+        "permission": "Signed roles"
+    },
+
+    "banlist": {
+        "description": "Check the server's ban list",
+        "usage": "banlist",
+        "permission": "Signed roles"
+    },
+
+    "clearwarning": {
+        "description": "Clear all of someone's warnings",
+        "usage": "duclearwarning @user",
+        "example": "duclearwarning @ezkid",
+        "permission": "Signed roles"
+    },
+
+    "kick": {
+        "description": "Make someone disappear from the server, though they can still rejoin if they have the link",
+        "usage": "dukick @user",
+        "example": "dukick @badboi",
+        "permission": "Signed roles"
+    },
+
+    "lock": {
+        "description": "preventing the chat channel from sending text or voice messages",
+        "usage": "dulock",
+        "permission": "Signed roles"
+    },
+
+    "modlog": {
+        "description": "Add/turn off notification messages for administrative actions",
+        "usage": "dumodlog <on #channel">/<off #channel>/<nothing to see mod log channel>,
+        "example": "dumodlog on #archive / dumodlog off #archive / <nothing>",
+        "permission": "Server owner"
+    },
+
+    "nickname": {
+        "description": "Change someone's display name on the server",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "purge": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "sign": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "signlist": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "signowner": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "slowmode": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "timeout": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "timeoutlist": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "unban": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "unlock": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "unmodlog": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "unsign": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "untimeout": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "unwarn": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "warn": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "warnlist": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    },
+
+    "serverstatus": {
+        "description": "",
+        "usage": "",
+        "example": "",
+        "permission": ""
+    }
+
+}

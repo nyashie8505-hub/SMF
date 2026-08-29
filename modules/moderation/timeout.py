@@ -1,5 +1,6 @@
 import re
 import discord
+from modules.general.emoji import EMOJIS
 
 from datetime import timedelta
 from discord.ext import commands
@@ -61,8 +62,8 @@ class TimeoutModule(commands.Cog):
         if timeout_duration is None:
 
             await ctx.send(
-                "🔻 ❌ Invalid time format.\n"
-                "🔻 📌 Examples: `1m`, `2m`, "
+                "{EMOJIS['highlight']} {EMOJIS['false']} Invalid time format.\n"
+                "{EMOJIS['highlight']} 📌 Examples: `1m`, `2m`, "
                 "`1minute`, `2minutes`"
             )
 
@@ -75,7 +76,7 @@ class TimeoutModule(commands.Cog):
         if member == ctx.author:
 
             await ctx.send(
-                "🔻 ❌ You cannot timeout yourself."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot timeout yourself."
             )
 
             return
@@ -87,7 +88,7 @@ class TimeoutModule(commands.Cog):
         if member == ctx.guild.owner:
 
             await ctx.send(
-                "🔻 ❌ You cannot timeout the server owner."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot timeout the server owner."
             )
 
             return
@@ -102,7 +103,7 @@ class TimeoutModule(commands.Cog):
         ):
 
             await ctx.send(
-                "🔻 ❌ You cannot timeout a member "
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot timeout a member "
                 "with an equal or higher role."
             )
 
@@ -115,7 +116,7 @@ class TimeoutModule(commands.Cog):
         if member.top_role >= ctx.guild.me.top_role:
 
             await ctx.send(
-                "🔻 ❌ My role is not high enough "
+                "{EMOJIS['highlight']} {EMOJIS['false']} My role is not high enough "
                 "to timeout this member."
             )
 
@@ -151,7 +152,7 @@ class TimeoutModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
+                "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                 "to timeout this member."
             )
 
@@ -160,7 +161,7 @@ class TimeoutModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ An error occurred while trying "
+                "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while trying "
                 "to timeout this member."
             )
 
@@ -191,7 +192,7 @@ class TimeoutModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 ✅ {member.mention} has been timed out.\n"
+            f"{EMOJIS['highlight']} {EMOJIS['true']} {member.mention} has been timed out.\n"
             f"🔻 ⏱️ Duration: `{minutes} minute(s)`\n"
             f"🔻 📝 Reason: {reason}"
         )

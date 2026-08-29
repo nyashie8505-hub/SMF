@@ -1,6 +1,7 @@
 from permissions import signed_permission
 import math
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -87,7 +88,7 @@ class BanListModule(commands.Cog):
         if not bans:
 
             await ctx.send(
-                "🔻 📋 The ban list is empty."
+                "{EMOJIS['highlight']} 📋 The ban list is empty."
             )
 
             return
@@ -109,7 +110,7 @@ class BanListModule(commands.Cog):
             ban_entries = bans[start:end]
 
             content = (
-                f"🔻 📋 **Ban List — "
+                f"{EMOJIS['highlight']} 📋 **Ban List — "
                 f"Page {page + 1}/{total_pages}**\n\n"
             )
 
@@ -132,9 +133,9 @@ class BanListModule(commands.Cog):
                 )
 
                 content += (
-                    f"🔻 `{index}.` **{username}**\n"
-                    f"🔻 🆔 ID: `{user.id}`\n"
-                    f"🔻 📝 Reason: {reason}\n\n"
+                    f"{EMOJIS['highlight']} `{index}.` **{username}**\n"
+                    f"{EMOJIS['highlight']} 🆔 ID: `{user.id}`\n"
+                    f"{EMOJIS['highlight']} 📝 Reason: {reason}\n\n"
                 )
 
 

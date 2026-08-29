@@ -1,5 +1,8 @@
 import discord
+
 from discord.ext import commands
+
+from modules.general.emoji import EMOJIS
 
 from database import get_connection
 from permissions import permission_admin
@@ -9,6 +12,7 @@ class SignModule(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+
 
     # ========================================================
     # SIGN
@@ -24,6 +28,14 @@ class SignModule(commands.Cog):
     ):
 
         # ====================================================
+        # SERVER CHECK
+        # ====================================================
+
+        if not ctx.guild:
+            return
+
+
+        # ====================================================
         # ROLE HIERARCHY
         # ====================================================
         #
@@ -34,9 +46,6 @@ class SignModule(commands.Cog):
         #   Can only manage roles BELOW their highest role.
         #
 
-        if not ctx.guild:
-            return
-
         is_server_owner = (
             ctx.author.id == ctx.guild.owner_id
         )
@@ -46,17 +55,21 @@ class SignModule(commands.Cog):
             if role >= ctx.author.top_role:
 
                 await ctx.send(
-                    "🔻 ❌ You can only manage roles "
-                    "below your highest role."
+                    f"{EMOJIS['highlight']} "
+                    f"{EMOJIS['false']} "
+                    f"You can only manage roles "
+                    f"below your highest role."
                 )
 
                 return
+
 
         # ====================================================
         # NORMALIZE COMMAND NAME
         # ====================================================
 
         command_name = command_name.lower().strip()
+
 
         # Remove "du" prefix.
 
@@ -66,6 +79,7 @@ class SignModule(commands.Cog):
 
                 command_name = command_name[2:]
 
+
         # ====================================================
         # EMPTY COMMAND CHECK
         # ====================================================
@@ -73,10 +87,13 @@ class SignModule(commands.Cog):
         if not command_name:
 
             await ctx.send(
-                "🔻 ❌ You must specify a command."
+                f"{EMOJIS['highlight']} "
+                f"{EMOJIS['false']} "
+                f"You must specify a command."
             )
 
             return
+
 
         # ====================================================
         # DUSIGNOWNER CANNOT BE SIGNED
@@ -85,11 +102,14 @@ class SignModule(commands.Cog):
         if command_name == "signowner":
 
             await ctx.send(
-                "🔻 ❌ `dusignowner` can only be used "
-                "by the server owner."
+                f"{EMOJIS['highlight']} "
+                f"{EMOJIS['false']} "
+                f"`dusignowner` can only be used "
+                f"by the server owner."
             )
 
             return
+
 
         # ====================================================
         # CHECK COMMAND EXISTS
@@ -104,10 +124,13 @@ class SignModule(commands.Cog):
             if command is None:
 
                 await ctx.send(
-                    "🔻 ❌ That command does not exist."
+                    f"{EMOJIS['highlight']} "
+                    f"{EMOJIS['false']} "
+                    f"That command does not exist."
                 )
 
                 return
+
 
         # ====================================================
         # DATABASE
@@ -116,78 +139,97 @@ class SignModule(commands.Cog):
         connection = get_connection()
         cursor = connection.cursor()
 
-        # ====================================================
-        # CHECK EXISTING PERMISSION
-        # ====================================================
 
-        cursor.execute(
-            """
-            SELECT 1
-            FROM command_permissions
-            WHERE guild_id = ?
-            AND role_id = ?
-            AND command_name = ?
-            """,
-            (
-                ctx.guild.id,
-                role.id,
-                command_name
+        try:
+
+            # ====================================================
+            # CHECK EXISTING PERMISSION
+            # ====================================================
+
+            cursor.execute(
+                """
+                SELECT 1
+                FROM command_permissions
+                WHERE guild_id = %s
+                AND role_id = %s
+                AND command_name = %s
+                """,
+                (
+                    ctx.guild.id,
+                    role.id,
+                    command_name
+                )
             )
-        )
 
-        existing = cursor.fetchone()
+            existing = cursor.fetchone()
 
-        if existing is not None:
 
+            if existing is not None:
+
+                return_message = (
+                    f"{EMOJIS['highlight']} "
+                    f"{EMOJIS['false']} "
+                    f"{role.mention} is already signed "
+                    f"for `{command_name}`."
+                )
+
+            else:
+
+                # ====================================================
+                # ADD PERMISSION
+                # ====================================================
+
+                cursor.execute(
+                    """
+                    INSERT INTO command_permissions (
+                        guild_id,
+                        role_id,
+                        command_name
+                    )
+                    VALUES (%s, %s, %s)
+                    """,
+                    (
+                        ctx.guild.id,
+                        role.id,
+                        command_name
+                    )
+                )
+
+                connection.commit()
+
+
+                # ====================================================
+                # SUCCESS
+                # ====================================================
+
+                if command_name == "all":
+
+                    return_message = (
+                        f"{EMOJIS['highlight']} "
+                        f"{EMOJIS['true']} "
+                        f"{role.mention} can now use "
+                        f"all signed moderation commands."
+                    )
+
+                else:
+
+                    return_message = (
+                        f"{EMOJIS['highlight']} "
+                        f"{EMOJIS['true']} "
+                        f"{role.mention} can now use "
+                        f"`du{command_name}`."
+                    )
+
+
+        finally:
+
+            cursor.close()
             connection.close()
 
-            await ctx.send(
-                f"🔻 ❌ {role.mention} is already "
-                f"signed for `{command_name}`."
-            )
 
-            return
-
-        # ====================================================
-        # ADD PERMISSION
-        # ====================================================
-
-        cursor.execute(
-            """
-            INSERT INTO command_permissions (
-                guild_id,
-                role_id,
-                command_name
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                ctx.guild.id,
-                role.id,
-                command_name
-            )
+        await ctx.send(
+            return_message
         )
-
-        connection.commit()
-        connection.close()
-
-        # ====================================================
-        # SUCCESS
-        # ====================================================
-
-        if command_name == "all":
-
-            await ctx.send(
-                f"🔻 ✅ {role.mention} can now use "
-                "all signed moderation commands."
-            )
-
-        else:
-
-            await ctx.send(
-                f"🔻 ✅ {role.mention} can now use "
-                f"`du{command_name}`."
-            )
 
 
 # ============================================================

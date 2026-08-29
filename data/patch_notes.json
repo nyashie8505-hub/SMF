@@ -1,0 +1,12 @@
+[
+    {
+        "title": "S.M.F 1.0.0",
+        "content": "Version 1.0 has finally been released, featuring administrator capabilities, ping display, and a view of users' total message counts!",
+        "note": "DSA dev"
+    },
+    {
+        "title": "SMF 1.0.2",
+        "content": "Added Help pannel and mores!",
+        "note": "use duhelp"
+    }
+]

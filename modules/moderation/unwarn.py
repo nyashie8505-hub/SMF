@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -93,7 +94,7 @@ class UnwarnModule(commands.Cog):
             if warning is None:
 
                 await ctx.send(
-                    "🔻 ❌ Warning not found."
+                    "{EMOJIS['highlight']} {EMOJIS['false']} Warning not found."
                 )
 
                 return
@@ -154,7 +155,7 @@ class UnwarnModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 ✅ Warning `{warning_id}` has been removed."
+            f"{EMOJIS['highlight']} {EMOJIS['true']} Warning `{warning_id}` has been removed."
         )
 
 

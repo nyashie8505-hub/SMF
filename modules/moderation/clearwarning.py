@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -63,7 +64,7 @@ class ClearWarningModule(commands.Cog):
         if member == ctx.author:
 
             await ctx.send(
-                "🔻 ❌ You cannot clear your own warnings."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot clear your own warnings."
             )
 
             return
@@ -102,7 +103,7 @@ class ClearWarningModule(commands.Cog):
             if warning_count == 0:
 
                 await ctx.send(
-                    f"🔻 ❌ {member.mention} has no warnings."
+                    f"{EMOJIS['highlight']} {EMOJIS['false']} {member.mention} has no warnings."
                 )
 
                 return
@@ -154,7 +155,7 @@ class ClearWarningModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 ✅ Cleared `{warning_count}` warning(s) "
+            f"{EMOJIS['highlight']} {EMOJIS['true']} Cleared `{warning_count}` warning(s) "
             f"from {member.mention}."
         )
 

@@ -1,6 +1,7 @@
 from permissions import signed_permission
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 
 class UnlockModule(commands.Cog):
@@ -36,7 +37,7 @@ class UnlockModule(commands.Cog):
 
 
         await ctx.send(
-            "🔻 🔓 This channel has been unlocked."
+            "{EMOJIS['highlight']} 🔓 This channel has been unlocked."
         )
 
 

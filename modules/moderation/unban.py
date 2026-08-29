@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 from permissions import signed_permission
 
@@ -31,7 +32,7 @@ class UnbanModule(commands.Cog):
         except discord.NotFound:
 
             await ctx.send(
-                "🔻 ❌ User not found."
+                "{EMOJIS['highlight']} {EMOJIS['false']} User not found."
             )
 
             return
@@ -39,7 +40,7 @@ class UnbanModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ Failed to fetch this user."
+                "{EMOJIS['highlight']} {EMOJIS['false']} Failed to fetch this user."
             )
 
             return
@@ -57,7 +58,7 @@ class UnbanModule(commands.Cog):
         except discord.NotFound:
 
             await ctx.send(
-                "🔻 ❌ This user is not banned."
+                "{EMOJIS['highlight']} {EMOJIS['false']} This user is not banned."
             )
 
             return
@@ -65,7 +66,7 @@ class UnbanModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
+                "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                 "to view the ban list."
             )
 
@@ -74,7 +75,7 @@ class UnbanModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ Failed to check the ban list."
+                "{EMOJIS['highlight']} {EMOJIS['false']} Failed to check the ban list."
             )
 
             return
@@ -93,7 +94,7 @@ class UnbanModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
+                "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                 "to unban users."
             )
 
@@ -102,7 +103,7 @@ class UnbanModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ An error occurred while trying "
+                "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while trying "
                 "to unban this user."
             )
 
@@ -129,7 +130,7 @@ class UnbanModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 ✅ {ban_entry.user.mention} has been unbanned."
+            f"{EMOJIS['highlight']} {EMOJIS['true']} {ban_entry.user.mention} has been unbanned."
         )
 
 

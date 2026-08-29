@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 from permissions import signed_permission
 
@@ -27,7 +28,7 @@ class KickModule(commands.Cog):
         if member == ctx.author:
 
             await ctx.send(
-                "🔻 ❌ You cannot kick yourself."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot kick yourself."
             )
 
             return
@@ -39,7 +40,7 @@ class KickModule(commands.Cog):
         if member == ctx.guild.owner:
 
             await ctx.send(
-                "🔻 ❌ You cannot kick the server owner."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot kick the server owner."
             )
 
             return
@@ -54,7 +55,7 @@ class KickModule(commands.Cog):
         ):
 
             await ctx.send(
-                "🔻 ❌ You cannot kick a member "
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot kick a member "
                 "with an equal or higher role."
             )
 
@@ -67,7 +68,7 @@ class KickModule(commands.Cog):
         if member.top_role >= ctx.guild.me.top_role:
 
             await ctx.send(
-                "🔻 ❌ My role is not high enough "
+                "{EMOJIS['highlight']} {EMOJIS['false']} My role is not high enough "
                 "to kick this member."
             )
 
@@ -89,7 +90,7 @@ class KickModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
+                "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                 "to kick this member."
             )
 
@@ -98,7 +99,7 @@ class KickModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ An error occurred while trying "
+                "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while trying "
                 "to kick this member."
             )
 
@@ -125,8 +126,8 @@ class KickModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 👢 {member.mention} has been kicked.\n"
-            f"🔻 📝 Reason: {reason}"
+            f"{EMOJIS['highlight']} 👢 {member.mention} has been kicked.\n"
+            f"{EMOJIS['highlight']} 📝 Reason: {reason}"
         )
 
 

@@ -1,4 +1,5 @@
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -28,7 +29,7 @@ class UnTimeoutModule(commands.Cog):
         if member == ctx.author:
 
             await ctx.send(
-                "🔻 ❌ You cannot remove your own timeout."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot remove your own timeout."
             )
 
             return
@@ -40,7 +41,7 @@ class UnTimeoutModule(commands.Cog):
         if not member.is_timed_out():
 
             await ctx.send(
-                f"🔻 ⚠️ {member.mention} is not timed out."
+                f"{EMOJIS['highlight']} ⚠️ {member.mention} is not timed out."
             )
 
             return
@@ -55,7 +56,7 @@ class UnTimeoutModule(commands.Cog):
         ):
 
             await ctx.send(
-                "🔻 ❌ You cannot moderate a member "
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot moderate a member "
                 "with an equal or higher role."
             )
 
@@ -75,7 +76,7 @@ class UnTimeoutModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
+                "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                 "to remove this timeout."
             )
 
@@ -84,7 +85,7 @@ class UnTimeoutModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ An error occurred while trying "
+                "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while trying "
                 "to remove the timeout."
             )
 
@@ -111,7 +112,7 @@ class UnTimeoutModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 ✅ Timeout removed from {member.mention}."
+            f"{EMOJIS['highlight']} {EMOJIS['true']} Timeout removed from {member.mention}."
         )
 
 

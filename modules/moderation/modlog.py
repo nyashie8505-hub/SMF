@@ -1,4 +1,5 @@
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands, tasks
 
@@ -74,7 +75,7 @@ class ModLogModule(commands.Cog):
     @staticmethod
     def bot_message(text):
 
-        return f"🔻 {text}"
+        return f"{EMOJIS['highlight']} {text}"
 
     # ============================================================
     # ACTION TITLES
@@ -332,7 +333,7 @@ class ModLogModule(commands.Cog):
         )
 
         embed = discord.Embed(
-            title=f"🔻 {title}",
+            title=f"{EMOJIS['highlight']} {title}",
             timestamp=discord.utils.utcnow()
         )
 

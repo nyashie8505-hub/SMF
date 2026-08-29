@@ -1,4 +1,5 @@
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -29,7 +30,7 @@ class PurgeModule(commands.Cog):
         if amount <= 0:
 
             await ctx.send(
-                "🔻 ❌ The amount must be greater than 0."
+                "{EMOJIS['highlight']} {EMOJIS['false']} The amount must be greater than 0."
             )
 
             return
@@ -37,7 +38,7 @@ class PurgeModule(commands.Cog):
         if amount > 100:
 
             await ctx.send(
-                "🔻 ❌ You can purge a maximum of "
+                "{EMOJIS['highlight']} {EMOJIS['false']} You can purge a maximum of "
                 "100 messages at once."
             )
 
@@ -58,7 +59,7 @@ class PurgeModule(commands.Cog):
             except discord.Forbidden:
 
                 await ctx.send(
-                    "🔻 ❌ I do not have permission "
+                    "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                     "to delete messages."
                 )
 
@@ -67,7 +68,7 @@ class PurgeModule(commands.Cog):
             except discord.HTTPException:
 
                 await ctx.send(
-                    "🔻 ❌ An error occurred while "
+                    "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while "
                     "deleting messages."
                 )
 
@@ -112,7 +113,7 @@ class PurgeModule(commands.Cog):
             if not messages_to_delete:
 
                 await ctx.send(
-                    f"🔻 ❌ No messages from "
+                    f"{EMOJIS['highlight']} {EMOJIS['false']} No messages from "
                     f"{member.mention} were found."
                 )
 
@@ -147,7 +148,7 @@ class PurgeModule(commands.Cog):
             except discord.Forbidden:
 
                 await ctx.send(
-                    "🔻 ❌ I do not have permission "
+                    "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                     "to delete these messages."
                 )
 
@@ -156,7 +157,7 @@ class PurgeModule(commands.Cog):
             except discord.HTTPException:
 
                 await ctx.send(
-                    "🔻 ❌ An error occurred while "
+                    "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while "
                     "deleting messages."
                 )
 
@@ -200,7 +201,7 @@ class PurgeModule(commands.Cog):
         # ========================================================
 
         confirmation = await ctx.send(
-            f"🔻 🗑️ Deleted `{deleted_count}` "
+            f"{EMOJIS['highlight']} 🗑️ Deleted `{deleted_count}` "
             f"message(s)."
         )
 

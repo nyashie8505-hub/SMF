@@ -9,11 +9,19 @@ from config import TOKEN, PREFIX
 from database import init_database
 
 
+# ================================================================
+# DISCORD INTENTS
+# ================================================================
+
 intents = discord.Intents.default()
 
 intents.message_content = True
 intents.members = True
 
+
+# ================================================================
+# BOT
+# ================================================================
 
 bot = commands.Bot(
     command_prefix=PREFIX,
@@ -22,24 +30,65 @@ bot = commands.Bot(
 )
 
 
+# ================================================================
+# READY
+# ================================================================
+
 @bot.event
 async def on_ready():
 
     print("=" * 40)
-    print(f"[ONLINE] Logged in as {bot.user}")
-    print(f"[ID] {bot.user.id}")
+    print(
+        f"[ONLINE] Logged in as {bot.user}"
+    )
+    print(
+        f"[ID] {bot.user.id}"
+    )
     print("=" * 40)
 
+@bot.event
+async def on_command_error(ctx, error):
+
+    print(
+        f"[COMMAND ERROR] "
+        f"{ctx.command}: "
+        f"{type(error).__name__}: "
+        f"{error}"
+    )
+
+    # Ignore unknown commands
+    if isinstance(
+        error,
+        commands.CommandNotFound
+    ):
+        return
+
+
+
+
+# ================================================================
+# LOAD MODULES
+# ================================================================
 
 async def load_modules():
 
-    for root, dirs, files in os.walk("modules"):
+    for root, dirs, files in os.walk(
+        "modules"
+    ):
 
         for file in files:
+
+            # ----------------------------------------------------
+            # Only Python files
+            # ----------------------------------------------------
 
             if not file.endswith(".py"):
                 continue
 
+
+            # ----------------------------------------------------
+            # Ignore package/helper files
+            # ----------------------------------------------------
 
             if file in [
                 "__init__.py",
@@ -47,6 +96,10 @@ async def load_modules():
             ]:
                 continue
 
+
+            # ----------------------------------------------------
+            # Convert file path to module path
+            # ----------------------------------------------------
 
             file_path = os.path.join(
                 root,
@@ -56,9 +109,16 @@ async def load_modules():
 
             module_path = (
                 file_path[:-3]
-                .replace(os.sep, ".")
+                .replace(
+                    os.sep,
+                    "."
+                )
             )
 
+
+            # ----------------------------------------------------
+            # Load extension
+            # ----------------------------------------------------
 
             try:
 
@@ -67,7 +127,8 @@ async def load_modules():
                 )
 
                 print(
-                    f"[OK] Loaded: {module_path}"
+                    f"[OK] Loaded: "
+                    f"{module_path}"
                 )
 
 
@@ -84,7 +145,15 @@ async def load_modules():
                 )
 
 
+# ================================================================
+# MAIN
+# ================================================================
+
 async def main():
+
+    # ------------------------------------------------------------
+    # Check token
+    # ------------------------------------------------------------
 
     if not TOKEN:
 
@@ -95,21 +164,58 @@ async def main():
         return
 
 
-    init_database()
+    # ------------------------------------------------------------
+    # Initialize database
+    # ------------------------------------------------------------
 
+    try:
+
+        init_database()
+
+        print(
+            "[OK] Database initialized."
+        )
+
+    except Exception as error:
+
+        print(
+            "[ERROR] Database initialization failed."
+        )
+
+        print(
+            f"{type(error).__name__}: "
+            f"{error}"
+        )
+
+        return
+
+
+    # ------------------------------------------------------------
+    # Start bot
+    # ------------------------------------------------------------
 
     async with bot:
 
+        # Load all modules
         await load_modules()
 
-        await bot.start(TOKEN)
+        # Start Discord connection
+        await bot.start(
+            TOKEN
+        )
 
+
+# ================================================================
+# ENTRY POINT
+# ================================================================
 
 if __name__ == "__main__":
 
     try:
 
-        asyncio.run(main())
+        asyncio.run(
+            main()
+        )
 
     except KeyboardInterrupt:
 

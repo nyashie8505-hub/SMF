@@ -1,5 +1,8 @@
 import discord
+
 from discord.ext import commands
+
+from modules.general.emoji import EMOJIS
 
 from database import get_owner_role, set_owner_role
 
@@ -10,6 +13,10 @@ class SignOwnerModule(commands.Cog):
         self.bot = bot
 
 
+    # ========================================================
+    # SIGN OWNER
+    # ========================================================
+
     @commands.command()
     async def signowner(
         self,
@@ -17,92 +24,90 @@ class SignOwnerModule(commands.Cog):
         role: discord.Role
     ):
 
-        # ========================================================
+        # ====================================================
         # GUILD CHECK
-        # ========================================================
+        # ====================================================
 
         if not ctx.guild:
             return
 
 
-        # ========================================================
+        # ====================================================
         # ONLY SERVER OWNER
-        # ========================================================
+        # ====================================================
 
         if ctx.author.id != ctx.guild.owner_id:
 
             await ctx.send(
-                "🔻 ❌ Only the server owner can use "
-                "`dusignowner`."
+                f"{EMOJIS['highlight']} "
+                f"{EMOJIS['false']} "
+                f"Only the server owner can use "
+                f"`dusignowner`."
             )
 
             return
 
 
-        # ========================================================
+        # ====================================================
         # ROLE VALIDATION
-        # ========================================================
+        # ====================================================
 
         # Cannot use @everyone
+
         if role.is_default():
 
             await ctx.send(
-                "🔻 ❌ You cannot use @everyone "
-                "as the Owner Role."
+                f"{EMOJIS['highlight']} "
+                f"{EMOJIS['false']} "
+                f"You cannot use @everyone "
+                f"as the Owner Role."
             )
 
             return
 
 
         # Cannot use managed/integration roles
+
         if role.managed:
 
             await ctx.send(
-                "🔻 ❌ You cannot use a managed/integration "
-                "role as the Owner Role."
+                f"{EMOJIS['highlight']} "
+                f"{EMOJIS['false']} "
+                f"You cannot use a managed/integration "
+                f"role as the Owner Role."
             )
 
             return
 
 
-        # ========================================================
-        # NO ROLE HIERARCHY CHECK
-        # ========================================================
-        #
-        # Server Owner can select ANY normal role.
-        #
-        # Do NOT check:
-        #
-        #     role >= ctx.author.top_role
-        #
-        # because the server owner is above the normal
-        # role hierarchy for permission purposes.
-        #
-
-
-        # ========================================================
+        # ====================================================
         # CURRENT OWNER ROLE
-        # ========================================================
+        # ====================================================
 
         current_role_id = get_owner_role(
             ctx.guild.id
         )
 
 
-        # Already the Owner Role
+        # ====================================================
+        # ALREADY OWNER ROLE
+        # ====================================================
+
         if current_role_id == role.id:
 
             await ctx.send(
-                f"🔻 ❌ {role.mention} is already "
-                "the Owner Role."
+                f"{EMOJIS['highlight']} "
+                f"{EMOJIS['false']} "
+                f"{role.mention} is already "
+                f"the Owner Role."
             )
 
             return
 
 
-        # ========================================================
+        # ====================================================
         # SAVE NEW OWNER ROLE
-        # ========================================================
+        # ====================================================
 
         set_owner_role(
             ctx.guild.id,
@@ -110,25 +115,26 @@ class SignOwnerModule(commands.Cog):
         )
 
 
-        # ========================================================
-        # SUCCESS MESSAGE
-        # ========================================================
+        # ====================================================
+        # FIRST OWNER ROLE
+        # ====================================================
 
         if current_role_id is None:
 
             await ctx.send(
-                f"🔻 👑 {role.mention} is now the "
-                "**Owner Role**.\n\n"
-                "Members with this role can use the "
-                "commands configured for the Owner Role."
+                f"{EMOJIS['highlight']} 👑 "
+                f"{role.mention} is now the "
+                f"**Owner Role**.\n\n"
+                f"Members with this role can use the "
+                f"commands configured for the Owner Role."
             )
 
             return
 
 
-        # ========================================================
+        # ====================================================
         # FIND OLD ROLE
-        # ========================================================
+        # ====================================================
 
         old_role = ctx.guild.get_role(
             current_role_id
@@ -144,16 +150,21 @@ class SignOwnerModule(commands.Cog):
             old_role_text = f"`{current_role_id}`"
 
 
-        # ========================================================
+        # ====================================================
         # UPDATED
-        # ========================================================
+        # ====================================================
 
         await ctx.send(
-            "🔻 👑 **Owner Role updated.**\n\n"
+            f"{EMOJIS['highlight']} 👑 "
+            f"**Owner Role updated.**\n\n"
             f"**Old:** {old_role_text}\n"
             f"**New:** {role.mention}"
         )
 
+
+# ============================================================
+# SETUP
+# ============================================================
 
 async def setup(bot):
 

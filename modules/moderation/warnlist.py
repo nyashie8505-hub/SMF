@@ -1,6 +1,7 @@
 from permissions import signed_permission
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 from database import get_connection
 
@@ -53,14 +54,14 @@ class WarnListModule(commands.Cog):
         if not warnings:
 
             await ctx.send(
-                f"🔻 📋 {member.mention} has no warnings."
+                f"{EMOJIS['highlight']} 📋 {member.mention} has no warnings."
             )
 
             return
 
 
         content = (
-            f"🔻 📋 **Warnings for {member}**\n\n"
+            f"{EMOJIS['highlight']} 📋 **Warnings for {member}**\n\n"
         )
 
 
@@ -73,10 +74,10 @@ class WarnListModule(commands.Cog):
 
 
             content += (
-                f"🔻 ⚠️ Warning ID: `{warning_id}`\n"
-                f"🔻 📝 Reason: {reason}\n"
-                f"🔻 👤 Moderator: <@{moderator_id}>\n"
-                f"🔻 ⏱️ Issued: <t:{created_at}:R>\n\n"
+                f"{EMOJIS['highlight']} ⚠️ Warning ID: `{warning_id}`\n"
+                f"{EMOJIS['highlight']} 📝 Reason: {reason}\n"
+                f"{EMOJIS['highlight']} 👤 Moderator: <@{moderator_id}>\n"
+                f"{EMOJIS['highlight']} ⏱️ Issued: <t:{created_at}:R>\n\n"
             )
 
 
@@ -85,7 +86,7 @@ class WarnListModule(commands.Cog):
 
             content = (
                 content[:1900]
-                + "\n🔻 ⚠️ List truncated."
+                + f"\n{EMOJIS['highlight']} ⚠️ List truncated."
             )
 
 

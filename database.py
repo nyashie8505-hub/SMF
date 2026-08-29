@@ -1,30 +1,34 @@
 import os
-import sqlite3
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
 
 
 # ================================================================
-# DATABASE CONFIGURATION
+# LOAD ENVIRONMENT
 # ================================================================
 
-DATABASE = "data/smf.db"
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 # ================================================================
-# GET DATABASE CONNECTION
+# DATABASE CONNECTION
 # ================================================================
 
 def get_connection():
 
-    os.makedirs(
-        "data",
-        exist_ok=True
-    )
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is not set."
+        )
 
-    connection = sqlite3.connect(
-        DATABASE
+    connection = psycopg2.connect(
+        DATABASE_URL,
+        connect_timeout=10
     )
-
-    connection.row_factory = sqlite3.Row
 
     return connection
 
@@ -35,14 +39,7 @@ def get_connection():
 
 def init_database():
 
-    os.makedirs(
-        "data",
-        exist_ok=True
-    )
-
-    connection = sqlite3.connect(
-        DATABASE
-    )
+    connection = get_connection()
 
     cursor = connection.cursor()
 
@@ -54,17 +51,17 @@ def init_database():
         """
         CREATE TABLE IF NOT EXISTS warnings (
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id BIGSERIAL PRIMARY KEY,
 
-            guild_id INTEGER NOT NULL,
+            guild_id BIGINT NOT NULL,
 
-            user_id INTEGER NOT NULL,
+            user_id BIGINT NOT NULL,
 
-            moderator_id INTEGER NOT NULL,
+            moderator_id BIGINT NOT NULL,
 
             reason TEXT NOT NULL,
 
-            created_at INTEGER NOT NULL
+            created_at BIGINT NOT NULL
 
         )
         """
@@ -78,9 +75,9 @@ def init_database():
         """
         CREATE TABLE IF NOT EXISTS command_permissions (
 
-            guild_id INTEGER NOT NULL,
+            guild_id BIGINT NOT NULL,
 
-            role_id INTEGER NOT NULL,
+            role_id BIGINT NOT NULL,
 
             command_name TEXT NOT NULL,
 
@@ -102,9 +99,9 @@ def init_database():
         """
         CREATE TABLE IF NOT EXISTS owner_roles (
 
-            guild_id INTEGER PRIMARY KEY,
+            guild_id BIGINT PRIMARY KEY,
 
-            role_id INTEGER NOT NULL
+            role_id BIGINT NOT NULL
 
         )
         """
@@ -118,9 +115,9 @@ def init_database():
         """
         CREATE TABLE IF NOT EXISTS modlog_channels (
 
-            guild_id INTEGER NOT NULL,
+            guild_id BIGINT NOT NULL,
 
-            channel_id INTEGER NOT NULL,
+            channel_id BIGINT NOT NULL,
 
             PRIMARY KEY (
                 guild_id,
@@ -139,9 +136,9 @@ def init_database():
         """
         CREATE TABLE IF NOT EXISTS modlog_disabled_commands (
 
-            guild_id INTEGER NOT NULL,
+            guild_id BIGINT NOT NULL,
 
-            channel_id INTEGER NOT NULL,
+            channel_id BIGINT NOT NULL,
 
             command_name TEXT NOT NULL,
 
@@ -157,17 +154,13 @@ def init_database():
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
 # ================================================================
 # BACKWARDS COMPATIBILITY
 # ================================================================
-#
-# Some existing modules use initialize_database().
-#
-# Keep it available so those modules continue working.
-#
 
 def initialize_database():
 
@@ -182,7 +175,9 @@ def get_owner_role(guild_id):
 
     connection = get_connection()
 
-    cursor = connection.cursor()
+    cursor = connection.cursor(
+        cursor_factory=RealDictCursor
+    )
 
     cursor.execute(
         """
@@ -190,7 +185,7 @@ def get_owner_role(guild_id):
 
         FROM owner_roles
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
         """,
         (
             guild_id,
@@ -199,6 +194,7 @@ def get_owner_role(guild_id):
 
     row = cursor.fetchone()
 
+    cursor.close()
     connection.close()
 
     if row is None:
@@ -227,12 +223,12 @@ def set_owner_role(
             role_id
         )
 
-        VALUES (?, ?)
+        VALUES (%s, %s)
 
-        ON CONFLICT(guild_id)
+        ON CONFLICT (guild_id)
 
         DO UPDATE SET
-            role_id = excluded.role_id
+            role_id = EXCLUDED.role_id
         """,
         (
             guild_id,
@@ -242,6 +238,7 @@ def set_owner_role(
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
@@ -253,7 +250,9 @@ def get_modlog_channels(guild_id):
 
     connection = get_connection()
 
-    cursor = connection.cursor()
+    cursor = connection.cursor(
+        cursor_factory=RealDictCursor
+    )
 
     cursor.execute(
         """
@@ -263,7 +262,7 @@ def get_modlog_channels(guild_id):
 
         FROM modlog_channels
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
 
         ORDER BY channel_id ASC
         """,
@@ -274,6 +273,7 @@ def get_modlog_channels(guild_id):
 
     rows = cursor.fetchall()
 
+    cursor.close()
     connection.close()
 
     return rows
@@ -298,9 +298,9 @@ def is_modlog_channel(
 
         FROM modlog_channels
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
 
-        AND channel_id = ?
+        AND channel_id = %s
 
         LIMIT 1
         """,
@@ -312,6 +312,7 @@ def is_modlog_channel(
 
     result = cursor.fetchone()
 
+    cursor.close()
     connection.close()
 
     return result is not None
@@ -332,14 +333,19 @@ def add_modlog_channel(
 
     cursor.execute(
         """
-        INSERT OR IGNORE INTO modlog_channels (
-
+        INSERT INTO modlog_channels (
             guild_id,
             channel_id
-
         )
 
-        VALUES (?, ?)
+        VALUES (%s, %s)
+
+        ON CONFLICT (
+            guild_id,
+            channel_id
+        )
+
+        DO NOTHING
         """,
         (
             guild_id,
@@ -349,6 +355,7 @@ def add_modlog_channel(
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
@@ -369,9 +376,9 @@ def remove_modlog_channel(
         """
         DELETE FROM modlog_channels
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
 
-        AND channel_id = ?
+        AND channel_id = %s
         """,
         (
             guild_id,
@@ -381,6 +388,7 @@ def remove_modlog_channel(
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
@@ -408,11 +416,11 @@ def is_modlog_command_disabled(
 
         FROM modlog_disabled_commands
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
 
-        AND channel_id = ?
+        AND channel_id = %s
 
-        AND command_name = ?
+        AND command_name = %s
 
         LIMIT 1
         """,
@@ -425,6 +433,7 @@ def is_modlog_command_disabled(
 
     result = cursor.fetchone()
 
+    cursor.close()
     connection.close()
 
     return result is not None
@@ -450,15 +459,21 @@ def disable_modlog_command(
 
     cursor.execute(
         """
-        INSERT OR IGNORE INTO modlog_disabled_commands (
-
+        INSERT INTO modlog_disabled_commands (
             guild_id,
             channel_id,
             command_name
-
         )
 
-        VALUES (?, ?, ?)
+        VALUES (%s, %s, %s)
+
+        ON CONFLICT (
+            guild_id,
+            channel_id,
+            command_name
+        )
+
+        DO NOTHING
         """,
         (
             guild_id,
@@ -469,6 +484,7 @@ def disable_modlog_command(
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
@@ -494,11 +510,11 @@ def enable_modlog_command(
         """
         DELETE FROM modlog_disabled_commands
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
 
-        AND channel_id = ?
+        AND channel_id = %s
 
-        AND command_name = ?
+        AND command_name = %s
         """,
         (
             guild_id,
@@ -509,6 +525,7 @@ def enable_modlog_command(
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
@@ -529,9 +546,9 @@ def clear_disabled_modlog_commands(
         """
         DELETE FROM modlog_disabled_commands
 
-        WHERE guild_id = ?
+        WHERE guild_id = %s
 
-        AND channel_id = ?
+        AND channel_id = %s
         """,
         (
             guild_id,
@@ -541,6 +558,7 @@ def clear_disabled_modlog_commands(
 
     connection.commit()
 
+    cursor.close()
     connection.close()
 
 
@@ -549,3 +567,4 @@ def clear_disabled_modlog_commands(
 # ================================================================
 
 init_database()
+

@@ -1,6 +1,7 @@
 from permissions import signed_permission
 import math
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -91,7 +92,7 @@ class TimeoutListModule(commands.Cog):
         if not timed_out_members:
 
             await ctx.send(
-                "🔻 📋 There are no timed out members."
+                "{EMOJIS['highlight']} 📋 There are no timed out members."
             )
 
             return
@@ -116,7 +117,7 @@ class TimeoutListModule(commands.Cog):
 
 
             content = (
-                f"🔻 📋 **Timeout List — "
+                f"{EMOJIS['highlight']} 📋 **Timeout List — "
                 f"Page {page + 1}/{total_pages}**\n\n"
             )
 
@@ -134,8 +135,8 @@ class TimeoutListModule(commands.Cog):
 
 
                 content += (
-                    f"🔻 `{index}.` {member.mention}\n"
-                    f"🔻 ⏱️ Until: <t:{timestamp}:R>\n\n"
+                    f"{EMOJIS['highlight']} `{index}.` {member.mention}\n"
+                    f"{EMOJIS['highlight']} ⏱️ Until: <t:{timestamp}:R>\n\n"
                 )
 
 

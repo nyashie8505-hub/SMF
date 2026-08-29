@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 from permissions import signed_permission
 
@@ -27,7 +28,7 @@ class BanModule(commands.Cog):
         if member == ctx.author:
 
             await ctx.send(
-                "🔻 ❌ You cannot ban yourself."
+                "{EMOJIS['highlight']} {EMOJIS['false']} What are you doing? You can't ban yourself, bro."
             )
 
             return
@@ -39,7 +40,7 @@ class BanModule(commands.Cog):
         if member == ctx.guild.owner:
 
             await ctx.send(
-                "🔻 ❌ You cannot ban the server owner."
+                "{EMOJIS['highlight']} ❌{EMOJIS['false']} You cannot ban the server owner."
             )
 
             return
@@ -54,8 +55,7 @@ class BanModule(commands.Cog):
         ):
 
             await ctx.send(
-                "🔻 ❌ You cannot ban a member "
-                "with an equal or higher role."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot ban a member with an equal or higher role."
             )
 
             return
@@ -67,8 +67,7 @@ class BanModule(commands.Cog):
         if member.top_role >= ctx.guild.me.top_role:
 
             await ctx.send(
-                "🔻 ❌ My role is not high enough "
-                "to ban this member."
+                f"{EMOJIS['highlight']} {EMOJIS['false']} My role is not high enough to ban this member."
             )
 
             return
@@ -89,8 +88,7 @@ class BanModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
-                "to ban this member."
+                f"{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission to ban this member."
             )
 
             return
@@ -98,8 +96,8 @@ class BanModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ An error occurred while trying "
-                "to ban this member."
+                f"{EMOJIS['highlight']} {EMOJIS['false']} **{member.mention}** could not be banned.\n"
+                f"An error occurred while trying to ban this member."
             )
 
             return
@@ -125,8 +123,8 @@ class BanModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 🔨 {member.mention} has been banned.\n"
-            f"🔻 📝 Reason: {reason}"
+            f"{EMOJIS['highlight']} {EMOJIS['banned']} **{member.mention}** has been banned.\n"
+            f"{EMOJIS['highlight']} 📝 Reason: {reason}"
         )
 
 

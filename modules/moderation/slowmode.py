@@ -1,4 +1,5 @@
 import discord
+from modules.general.emoji import EMOJIS
 
 from discord.ext import commands
 
@@ -40,7 +41,7 @@ class SlowmodeModule(commands.Cog):
             except ValueError:
 
                 await ctx.send(
-                    "🔻 ❌ Please enter a number of "
+                    "{EMOJIS['highlight']} {EMOJIS['false']} Please enter a number of "
                     "seconds or `off`."
                 )
 
@@ -53,7 +54,7 @@ class SlowmodeModule(commands.Cog):
         if seconds < 0:
 
             await ctx.send(
-                "🔻 ❌ Slowmode cannot be negative."
+                "{EMOJIS['highlight']} {EMOJIS['false']} Slowmode cannot be negative."
             )
 
             return
@@ -61,7 +62,7 @@ class SlowmodeModule(commands.Cog):
         if seconds > 21600:
 
             await ctx.send(
-                "🔻 ❌ Slowmode cannot exceed "
+                "{EMOJIS['highlight']} {EMOJIS['false']} Slowmode cannot exceed "
                 "21600 seconds."
             )
 
@@ -83,7 +84,7 @@ class SlowmodeModule(commands.Cog):
         except discord.Forbidden:
 
             await ctx.send(
-                "🔻 ❌ I do not have permission "
+                "{EMOJIS['highlight']} {EMOJIS['false']} I do not have permission "
                 "to change slowmode."
             )
 
@@ -92,7 +93,7 @@ class SlowmodeModule(commands.Cog):
         except discord.HTTPException:
 
             await ctx.send(
-                "🔻 ❌ An error occurred while "
+                "{EMOJIS['highlight']} {EMOJIS['false']} An error occurred while "
                 "changing slowmode."
             )
 
@@ -136,13 +137,13 @@ class SlowmodeModule(commands.Cog):
         if seconds == 0:
 
             await ctx.send(
-                "🔻 🔓 Slowmode has been disabled."
+                "{EMOJIS['highlight']} 🔓 Slowmode has been disabled."
             )
 
             return
 
         await ctx.send(
-            f"🔻 🐢 Slowmode has been set to "
+            f"{EMOJIS['highlight']} 🐢 Slowmode has been set to "
             f"`{seconds}` second(s)."
         )
 

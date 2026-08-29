@@ -1,6 +1,7 @@
 from permissions import signed_permission
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 
 class LockModule(commands.Cog):
@@ -36,7 +37,7 @@ class LockModule(commands.Cog):
 
 
         await ctx.send(
-            "🔻 🔒 This channel has been locked."
+            "{EMOJIS['highlight']} 🔒 This channel has been locked."
         )
 
 

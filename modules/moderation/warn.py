@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import discord
+from modules.general.emoji import EMOJIS
 
 from datetime import datetime, timezone
 from discord.ext import commands
@@ -66,7 +67,7 @@ class WarnModule(commands.Cog):
         if member == ctx.author:
 
             await ctx.send(
-                "🔻 ❌ You cannot warn yourself."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot warn yourself."
             )
 
             return
@@ -78,7 +79,7 @@ class WarnModule(commands.Cog):
         if member == ctx.guild.owner:
 
             await ctx.send(
-                "🔻 ❌ You cannot warn the server owner."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot warn the server owner."
             )
 
             return
@@ -93,7 +94,7 @@ class WarnModule(commands.Cog):
         ):
 
             await ctx.send(
-                "🔻 ❌ You cannot warn a member "
+                "{EMOJIS['highlight']} {EMOJIS['false']} You cannot warn a member "
                 "with an equal or higher role."
             )
 
@@ -106,7 +107,7 @@ class WarnModule(commands.Cog):
         if member.top_role >= ctx.guild.me.top_role:
 
             await ctx.send(
-                "🔻 ❌ My role is not high enough "
+                "{EMOJIS['highlight']} {EMOJIS['false']} My role is not high enough "
                 "to moderate this member."
             )
 
@@ -186,10 +187,10 @@ class WarnModule(commands.Cog):
         # ========================================================
 
         await ctx.send(
-            f"🔻 ⚠️ {member.mention} has received a warning.\n"
-            f"🔻 🆔 Warning ID: `{warning_id}`\n"
-            f"🔻 📝 Reason: {reason}\n"
-            f"🔻 ⏱️ Issued: <t:{created_at}:R>"
+            f"{EMOJIS['highlight']} ⚠️ {member.mention} has received a warning.\n"
+            f"{EMOJIS['highlight']} 🆔 Warning ID: `{warning_id}`\n"
+            f"{EMOJIS['highlight']} 📝 Reason: {reason}\n"
+            f"{EMOJIS['highlight']} ⏱️ Issued: <t:{created_at}:R>"
         )
 
 

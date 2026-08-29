@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from modules.general.emoji import EMOJIS
 
 from database import get_connection
 from permissions import permission_admin
@@ -39,7 +40,7 @@ class UnsignModule(commands.Cog):
             if role >= ctx.author.top_role:
 
                 await ctx.send(
-                    "🔻 ❌ You can only manage roles "
+                    "{EMOJIS['highlight']} {EMOJIS['false']} You can only manage roles "
                     "below your highest role."
                 )
 
@@ -66,7 +67,7 @@ class UnsignModule(commands.Cog):
         if not command_name:
 
             await ctx.send(
-                "🔻 ❌ You must specify a command."
+                "{EMOJIS['highlight']} {EMOJIS['false']} You must specify a command."
             )
 
             return
@@ -78,7 +79,7 @@ class UnsignModule(commands.Cog):
         if command_name == "signowner":
 
             await ctx.send(
-                "🔻 ❌ `dusignowner` cannot be modified."
+                "{EMOJIS['highlight']} {EMOJIS['false']} `dusignowner` cannot be modified."
             )
 
             return
@@ -120,7 +121,7 @@ class UnsignModule(commands.Cog):
         if deleted == 0:
 
             await ctx.send(
-                f"🔻 ❌ {role.mention} is not signed "
+                f"{EMOJIS['highlight']} {EMOJIS['false']} {role.mention} is not signed "
                 f"for `{command_name}`."
             )
 
@@ -133,14 +134,14 @@ class UnsignModule(commands.Cog):
         if command_name == "all":
 
             await ctx.send(
-                f"🔻 ✅ Removed all signed permissions "
+                f"{EMOJIS['highlight']} {EMOJIS['true']} Removed all signed permissions "
                 f"from {role.mention}."
             )
 
         else:
 
             await ctx.send(
-                f"🔻 ✅ {role.mention} can no longer use "
+                f"{EMOJIS['highlight']} {EMOJIS['true']} {role.mention} can no longer use "
                 f"`du{command_name}`."
             )
 
