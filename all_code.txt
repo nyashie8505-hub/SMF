@@ -1,0 +1,5930 @@
+============================================================ 
+FILE: D:\SMF\config.py 
+============================================================ 
+import os
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+
+PREFIX = "du"
+============================================================ 
+FILE: D:\SMF\database.py 
+============================================================ 
+import discord
+
+from discord.ext import commands, tasks
+
+from database import (
+    get_modlog_channels,
+    add_modlog_channel,
+    is_modlog_channel,
+    is_modlog_command_disabled,
+    disable_modlog_command,
+    enable_modlog_command,
+)
+
+from permissions import signed_permission
+
+
+class ModLogModule(commands.Cog):
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+        # ========================================================
+        # AUDIT LOG CACHE
+        # ========================================================
+        #
+        # Stores the newest Audit Log ID per guild.
+        #
+        # This prevents old Audit Logs from being sent when
+        # the bot starts.
+        #
+
+        self.last_audit_log_ids = {}
+
+        # ========================================================
+        # START AUDIT LOG WATCHER
+        # ========================================================
+
+        self.audit_log_watcher.start()
+
+    # ============================================================
+    # CLEANUP
+    # ============================================================
+
+    def cog_unload(self):
+
+        self.audit_log_watcher.cancel()
+
+    # ============================================================
+    # BOT MESSAGE
+    # ============================================================
+
+    @staticmethod
+    def bot_message(text):
+
+        return f"🔻 {text}"
+
+    # ============================================================
+    # ACTION TITLES
+    # ============================================================
+
+    ACTION_TITLES = {
+
+        "ban":
+            "Member Banned",
+
+        "unban":
+            "Member Unbanned",
+
+        "kick":
+            "Member Kicked",
+
+        "timeout":
+            "Member Timed Out",
+
+        "untimeout":
+            "Timeout Removed",
+
+        "warn":
+            "Member Warned",
+
+        "unwarn":
+            "Warning Removed",
+
+        "clearwarning":
+            "Warnings Cleared",
+
+        "purge":
+            "Messages Purged",
+
+        "slowmode":
+            "Slowmode Updated",
+
+        "channel_create":
+            "Channel Created",
+
+        "channel_update":
+            "Channel Updated",
+
+        "channel_delete":
+            "Channel Deleted",
+
+        "role_create":
+            "Role Created",
+
+        "role_update":
+            "Role Updated",
+
+        "role_delete":
+            "Role Deleted",
+
+        "message_delete":
+            "Message Deleted",
+
+        "message_bulk_delete":
+            "Messages Bulk Deleted",
+
+        "message_pin":
+            "Message Pinned",
+
+        "message_unpin":
+            "Message Unpinned",
+
+        "member_update":
+            "Member Updated",
+
+        "guild_update":
+            "Server Updated",
+
+        "webhook_create":
+            "Webhook Created",
+
+        "webhook_update":
+            "Webhook Updated",
+
+        "webhook_delete":
+            "Webhook Deleted",
+
+        "emoji_create":
+            "Emoji Created",
+
+        "emoji_update":
+            "Emoji Updated",
+
+        "emoji_delete":
+            "Emoji Deleted",
+    }
+
+    # ============================================================
+    # COMMAND NAMES THAT CAN BE CONFIGURED
+    # ============================================================
+
+    SUPPORTED_ACTIONS = {
+
+        "ban",
+        "unban",
+        "kick",
+        "timeout",
+        "untimeout",
+        "warn",
+        "unwarn",
+        "clearwarning",
+        "purge",
+        "slowmode",
+
+        "channel_create",
+        "channel_update",
+        "channel_delete",
+
+        "role_create",
+        "role_update",
+        "role_delete",
+
+        "message_delete",
+        "message_bulk_delete",
+        "message_pin",
+        "message_unpin",
+
+        "member_update",
+        "guild_update",
+
+        "webhook_create",
+        "webhook_update",
+        "webhook_delete",
+
+        "emoji_create",
+        "emoji_update",
+        "emoji_delete",
+    }
+
+    # ============================================================
+    # AUDIT LOG ACTION NAMES
+    # ============================================================
+
+    AUDIT_ACTION_NAMES = {
+
+        discord.AuditLogAction.ban:
+            "ban",
+
+        discord.AuditLogAction.unban:
+            "unban",
+
+        discord.AuditLogAction.kick:
+            "kick",
+
+        discord.AuditLogAction.member_update:
+            "member_update",
+
+        discord.AuditLogAction.channel_create:
+            "channel_create",
+
+        discord.AuditLogAction.channel_update:
+            "channel_update",
+
+        discord.AuditLogAction.channel_delete:
+            "channel_delete",
+
+        discord.AuditLogAction.role_create:
+            "role_create",
+
+        discord.AuditLogAction.role_update:
+            "role_update",
+
+        discord.AuditLogAction.role_delete:
+            "role_delete",
+
+        discord.AuditLogAction.message_delete:
+            "message_delete",
+
+        discord.AuditLogAction.message_bulk_delete:
+            "message_bulk_delete",
+
+        discord.AuditLogAction.message_pin:
+            "message_pin",
+
+        discord.AuditLogAction.message_unpin:
+            "message_unpin",
+
+        discord.AuditLogAction.guild_update:
+            "guild_update",
+
+        discord.AuditLogAction.webhook_create:
+            "webhook_create",
+
+        discord.AuditLogAction.webhook_update:
+            "webhook_update",
+
+        discord.AuditLogAction.webhook_delete:
+            "webhook_delete",
+
+        discord.AuditLogAction.emoji_create:
+            "emoji_create",
+
+        discord.AuditLogAction.emoji_update:
+            "emoji_update",
+
+        discord.AuditLogAction.emoji_delete:
+            "emoji_delete",
+    }
+
+    # ============================================================
+    # GET ACTION TITLE
+    # ============================================================
+
+    def get_action_title(self, action):
+
+        return self.ACTION_TITLES.get(
+            action,
+            action.replace("_", " ").title()
+        )
+
+    # ============================================================
+    # FORMAT USER
+    # ============================================================
+
+    @staticmethod
+    def format_user(user):
+
+        if user is None:
+            return "Unknown"
+
+        mention = getattr(
+            user,
+            "mention",
+            str(user)
+        )
+
+        user_id = getattr(
+            user,
+            "id",
+            "Unknown"
+        )
+
+        return (
+            f"{mention} `{user_id}`"
+        )
+
+    # ============================================================
+    # CREATE EMBED
+    # ============================================================
+
+    def create_embed(
+        self,
+        action,
+        target=None,
+        moderator=None,
+        reason=None,
+        details=None
+    ):
+
+        title = self.get_action_title(
+            action
+        )
+
+        embed = discord.Embed(
+            title=f"🔻 {title}",
+            timestamp=discord.utils.utcnow()
+        )
+
+        # ========================================================
+        # TARGET
+        # ========================================================
+
+        if target is not None:
+
+            embed.add_field(
+                name="User",
+                value=self.format_user(target),
+                inline=False
+            )
+
+        # ========================================================
+        # MODERATOR
+        # ========================================================
+
+        if moderator is not None:
+
+            embed.add_field(
+                name="Moderator",
+                value=self.format_user(moderator),
+                inline=False
+            )
+
+        # ========================================================
+        # REASON
+        # ========================================================
+
+        if reason:
+
+            embed.add_field(
+                name="Reason",
+                value=str(reason)[:1024],
+                inline=False
+            )
+
+        # ========================================================
+        # DETAILS
+        # ========================================================
+
+        if details:
+
+            embed.add_field(
+                name="Details",
+                value=str(details)[:1024],
+                inline=False
+            )
+
+        # ========================================================
+        # FOOTER
+        # ========================================================
+
+        embed.set_footer(
+            text=f"Action: {action}"
+        )
+
+        return embed
+
+    # ============================================================
+    # SEND LOG
+    # ============================================================
+    #
+    # THIS IS THE MAIN EMBED SENDER.
+    #
+    # Every moderation module should call:
+    #
+    # await logger.log_action(...)
+    #
+    # ============================================================
+
+    async def send_log(
+        self,
+        guild,
+        action,
+        target=None,
+        moderator=None,
+        reason=None,
+        details=None
+    ):
+
+        if guild is None:
+            return
+
+        action = str(action).lower()
+
+        # ========================================================
+        # GET MODLOG CHANNELS
+        # ========================================================
+
+        rows = get_modlog_channels(
+            guild.id
+        )
+
+        if not rows:
+            return
+
+        # ========================================================
+        # CREATE EMBED
+        # ========================================================
+
+        embed = self.create_embed(
+            action=action,
+            target=target,
+            moderator=moderator,
+            reason=reason,
+            details=details
+        )
+
+        # ========================================================
+        # SEND TO ALL MODLOG CHANNELS
+        # ========================================================
+
+        for row in rows:
+
+            channel_id = row["channel_id"]
+
+            # ====================================================
+            # CHECK COMMAND FILTER
+            # ====================================================
+
+            if is_modlog_command_disabled(
+                guild.id,
+                channel_id,
+                action
+            ):
+
+                continue
+
+            # ====================================================
+            # GET CHANNEL
+            # ====================================================
+
+            channel = guild.get_channel(
+                channel_id
+            )
+
+            if channel is None:
+                continue
+
+            # ====================================================
+            # SEND EMBED
+            # ====================================================
+
+            try:
+
+                await channel.send(
+                    embed=embed
+                )
+
+            except (
+                discord.Forbidden,
+                discord.NotFound,
+                discord.HTTPException
+            ):
+
+                continue
+
+    # ============================================================
+    # PUBLIC LOGGER
+    # ============================================================
+    #
+    # USED BY:
+    #
+    # ban.py
+    # unban.py
+    # kick.py
+    # timeout.py
+    # untimeout.py
+    # warn.py
+    # unwarn.py
+    # clearwarning.py
+    # purge.py
+    # slowmode.py
+    #
+    # ============================================================
+
+    async def log_action(
+        self,
+        guild,
+        action,
+        target=None,
+        moderator=None,
+        reason=None,
+        details=None
+    ):
+
+        await self.send_log(
+            guild=guild,
+            action=action,
+            target=target,
+            moderator=moderator,
+            reason=reason,
+            details=details
+        )
+
+    # ============================================================
+    # FIND LOGGER
+    # ============================================================
+
+    @staticmethod
+    def get_logger(bot):
+
+        return bot.get_cog(
+            "ModLogModule"
+        )
+
+    # ============================================================
+    # TIMEOUT DETECTION
+    # ============================================================
+
+    @staticmethod
+    def is_timeout_entry(entry):
+
+        if (
+            entry.action
+            != discord.AuditLogAction.member_update
+        ):
+
+            return False
+
+        before = getattr(
+            entry,
+            "before",
+            None
+        )
+
+        after = getattr(
+            entry,
+            "after",
+            None
+        )
+
+        if before is None or after is None:
+            return False
+
+        before_timeout = getattr(
+            before,
+            "timed_out_until",
+            None
+        )
+
+        after_timeout = getattr(
+            after,
+            "timed_out_until",
+            None
+        )
+
+        return before_timeout != after_timeout
+
+    # ============================================================
+    # GET AUDIT ACTION NAME
+    # ============================================================
+
+    def get_audit_action_name(self, entry):
+
+        # ========================================================
+        # TIMEOUT / UNTIMEOUT
+        # ========================================================
+
+        if self.is_timeout_entry(entry):
+
+            before = getattr(
+                entry.before,
+                "timed_out_until",
+                None
+            )
+
+            after = getattr(
+                entry.after,
+                "timed_out_until",
+                None
+            )
+
+            if (
+                before is None
+                and after is not None
+            ):
+
+                return "timeout"
+
+            if (
+                before is not None
+                and after is None
+            ):
+
+                return "untimeout"
+
+            return "timeout"
+
+        # ========================================================
+        # NORMAL AUDIT ACTION
+        # ========================================================
+
+        return self.AUDIT_ACTION_NAMES.get(
+            entry.action
+        )
+
+    # ============================================================
+    # PROCESS AUDIT ENTRY
+    # ============================================================
+
+    async def process_audit_entry(
+        self,
+        entry
+    ):
+
+        guild = entry.guild
+
+        if guild is None:
+            return
+
+        # ========================================================
+        # MODERATOR
+        # ========================================================
+
+        moderator = entry.user
+
+        # ========================================================
+        # IMPORTANT:
+        #
+        # Ignore actions performed by THIS bot.
+        #
+        # Otherwise:
+        #
+        # duban
+        #
+        # would produce:
+        #
+        # 1. Direct logger Embed
+        # 2. Audit Log Embed
+        #
+        # causing duplicate logs.
+        # ========================================================
+
+        if (
+            moderator is not None
+            and self.bot.user is not None
+            and moderator.id == self.bot.user.id
+        ):
+
+            return
+
+        # ========================================================
+        # ACTION
+        # ========================================================
+
+        action = self.get_audit_action_name(
+            entry
+        )
+
+        if action is None:
+            return
+
+        # ========================================================
+        # TARGET
+        # ========================================================
+
+        target = entry.target
+
+        # ========================================================
+        # REASON
+        # ========================================================
+
+        reason = entry.reason
+
+        # ========================================================
+        # DETAILS
+        # ========================================================
+
+        details = None
+
+        # ========================================================
+        # TIMEOUT
+        # ========================================================
+
+        if action == "timeout":
+
+            after = getattr(
+                entry,
+                "after",
+                None
+            )
+
+            timeout_until = getattr(
+                after,
+                "timed_out_until",
+                None
+            )
+
+            if timeout_until:
+
+                details = (
+                    "Until: "
+                    f"<t:{int(timeout_until.timestamp())}:F>"
+                )
+
+        elif action == "untimeout":
+
+            details = (
+                "The timeout was removed."
+            )
+
+        # ========================================================
+        # SEND EMBED
+        # ========================================================
+
+        await self.send_log(
+            guild=guild,
+            action=action,
+            target=target,
+            moderator=moderator,
+            reason=reason,
+            details=details
+        )
+
+    # ============================================================
+    # AUDIT LOG WATCHER
+    # ============================================================
+    #
+    # Detects actions performed outside this bot.
+    #
+    # Examples:
+    #
+    # Dyno bans someone
+    # Dyno kicks someone
+    # A moderator manually bans someone
+    # Another bot times someone out
+    #
+    # ============================================================
+
+    @tasks.loop(seconds=2)
+    async def audit_log_watcher(self):
+
+        await self.bot.wait_until_ready()
+
+        for guild in self.bot.guilds:
+
+            try:
+
+                # =================================================
+                # ONLY WATCH SERVERS WITH MODLOG
+                # =================================================
+
+                rows = get_modlog_channels(
+                    guild.id
+                )
+
+                if not rows:
+                    continue
+
+                # =================================================
+                # GET RECENT AUDIT LOGS
+                # =================================================
+
+                entries = []
+
+                async for entry in guild.audit_logs(
+                    limit=20
+                ):
+
+                    entries.append(
+                        entry
+                    )
+
+                if not entries:
+                    continue
+
+                # =================================================
+                # AUDIT LOGS ARE NEWEST FIRST
+                # =================================================
+
+                entries.reverse()
+
+                # =================================================
+                # FIRST RUN
+                #
+                # Don't dump old logs.
+                # =================================================
+
+                if guild.id not in self.last_audit_log_ids:
+
+                    self.last_audit_log_ids[
+                        guild.id
+                    ] = max(
+                        entry.id
+                        for entry in entries
+                    )
+
+                    continue
+
+                # =================================================
+                # LAST PROCESSED ID
+                # =================================================
+
+                last_id = self.last_audit_log_ids[
+                    guild.id
+                ]
+
+                # =================================================
+                # FIND NEW ENTRIES
+                # =================================================
+
+                new_entries = [
+                    entry
+                    for entry in entries
+                    if entry.id > last_id
+                ]
+
+                # =================================================
+                # UPDATE CACHE
+                # =================================================
+
+                self.last_audit_log_ids[
+                    guild.id
+                ] = max(
+                    entry.id
+                    for entry in entries
+                )
+
+                # =================================================
+                # PROCESS NEW ENTRIES
+                # =================================================
+
+                for entry in new_entries:
+
+                    try:
+
+                        await self.process_audit_entry(
+                            entry
+                        )
+
+                    except Exception as error:
+
+                        print(
+                            "[ModLog] Failed to process "
+                            f"audit entry {entry.id}: {error}"
+                        )
+
+            except discord.Forbidden:
+
+                # Missing View Audit Log permission.
+                continue
+
+            except discord.NotFound:
+
+                continue
+
+            except discord.HTTPException:
+
+                continue
+
+            except Exception as error:
+
+                print(
+                    "[ModLog] Audit watcher error "
+                    f"in {guild.name}: {error}"
+                )
+
+    # ============================================================
+    # LOOP READY
+    # ============================================================
+
+    @audit_log_watcher.before_loop
+    async def before_audit_log_watcher(self):
+
+        await self.bot.wait_until_ready()
+
+    # ============================================================
+    # MODLOG COMMAND
+    #
+    # duModlog
+    #
+    # duModlog #channel
+    #
+    # duModlog on ban #channel
+    #
+    # duModlog off ban #channel
+    #
+    # ============================================================
+
+    @commands.command(
+        name="modlog"
+    )
+    @commands.guild_only()
+    @signed_permission()
+    async def modlog(
+        self,
+        ctx,
+        action=None,
+        command_name=None,
+        channel: discord.TextChannel = None
+    ):
+
+        # ========================================================
+        # duModlog
+        #
+        # SHOW ALL MODLOG CHANNELS
+        # ========================================================
+
+        if action is None:
+
+            rows = get_modlog_channels(
+                ctx.guild.id
+            )
+
+            if not rows:
+
+                await ctx.send(
+                    self.bot_message(
+                        "There are currently no channels "
+                        "with ModLog enabled."
+                    )
+                )
+
+                return
+
+            channels = []
+
+            for row in rows:
+
+                target_channel = ctx.guild.get_channel(
+                    row["channel_id"]
+                )
+
+                if target_channel is not None:
+
+                    channels.append(
+                        target_channel.mention
+                    )
+
+            if not channels:
+
+                await ctx.send(
+                    self.bot_message(
+                        "There are currently no channels "
+                        "with ModLog enabled."
+                    )
+                )
+
+                return
+
+            await ctx.send(
+                self.bot_message(
+                    "**Channels with ModLog:**\n"
+                    + "\n".join(
+                        f"• {channel}"
+                        for channel in channels
+                    )
+                )
+            )
+
+            return
+
+        # ========================================================
+        # duModlog #channel
+        #
+        # ENABLE MODLOG IN CHANNEL
+        # ========================================================
+
+        if (
+            action.startswith("<#")
+            and action.endswith(">")
+        ):
+
+            try:
+
+                channel_id = int(
+                    action[2:-1]
+                )
+
+            except ValueError:
+
+                await ctx.send(
+                    self.bot_message(
+                        "Invalid channel."
+                    )
+                )
+
+                return
+
+            target_channel = ctx.guild.get_channel(
+                channel_id
+            )
+
+            if target_channel is None:
+
+                await ctx.send(
+                    self.bot_message(
+                        "I could not find that channel."
+                    )
+                )
+
+                return
+
+            if is_modlog_channel(
+                ctx.guild.id,
+                target_channel.id
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"{target_channel.mention} "
+                        "already has ModLog enabled."
+                    )
+                )
+
+                return
+
+            add_modlog_channel(
+                ctx.guild.id,
+                target_channel.id
+            )
+
+            await ctx.send(
+                self.bot_message(
+                    f"ModLog has been enabled in "
+                    f"{target_channel.mention}."
+                )
+            )
+
+            return
+
+        # ========================================================
+        # duModlog on [command] #channel
+        # ========================================================
+
+        if action.lower() == "on":
+
+            if (
+                command_name is None
+                or channel is None
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        "Usage: "
+                        "`duModlog on [command] #channel`"
+                    )
+                )
+
+                return
+
+            command_name = command_name.lower()
+
+            # ====================================================
+            # VALID COMMAND
+            # ====================================================
+
+            if command_name not in self.SUPPORTED_ACTIONS:
+
+                await ctx.send(
+                    self.bot_message(
+                        f"Unknown ModLog action `{command_name}`."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # CHANNEL MUST BE MODLOG
+            # ====================================================
+
+            if not is_modlog_channel(
+                ctx.guild.id,
+                channel.id
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"{channel.mention} does not have "
+                        "ModLog enabled."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # ALREADY ENABLED
+            # ====================================================
+
+            if not is_modlog_command_disabled(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        "This command is still logging."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # ENABLE
+            # ====================================================
+
+            enable_modlog_command(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            )
+
+            await ctx.send(
+                self.bot_message(
+                    f"Logging for `{command_name}` has been "
+                    f"enabled in {channel.mention}."
+                )
+            )
+
+            return
+
+        # ========================================================
+        # duModlog off [command] #channel
+        # ========================================================
+
+        if action.lower() == "off":
+
+            if (
+                command_name is None
+                or channel is None
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        "Usage: "
+                        "`duModlog off [command] #channel`"
+                    )
+                )
+
+                return
+
+            command_name = command_name.lower()
+
+            # ====================================================
+            # VALID COMMAND
+            # ====================================================
+
+            if command_name not in self.SUPPORTED_ACTIONS:
+
+                await ctx.send(
+                    self.bot_message(
+                        f"Unknown ModLog action `{command_name}`."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # CHANNEL MUST BE MODLOG
+            # ====================================================
+
+            if not is_modlog_channel(
+                ctx.guild.id,
+                channel.id
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"{channel.mention} does not have "
+                        "ModLog enabled."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # ALREADY DISABLED
+            # ====================================================
+
+            if is_modlog_command_disabled(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"Logging for `{command_name}` is already "
+                        f"disabled in {channel.mention}."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # DISABLE
+            # ====================================================
+
+            disable_modlog_command(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            )
+
+            await ctx.send(
+                self.bot_message(
+                    f"Logging for `{command_name}` has been "
+                    f"disabled in {channel.mention}."
+                )
+            )
+
+            return
+
+        # ========================================================
+        # INVALID USAGE
+        # ========================================================
+
+        await ctx.send(
+            self.bot_message(
+                "**Invalid ModLog command.**\n\n"
+                "`duModlog` — View ModLog channels\n"
+                "`duModlog #channel` — Enable ModLog\n"
+                "`duModlog on [command] #channel` — Enable logging\n"
+                "`duModlog off [command] #channel` — Disable logging"
+            )
+        )
+
+
+# ================================================================
+# SETUP
+# ================================================================
+
+async def setup(bot):
+
+    await bot.add_cog(
+        ModLogModule(bot)
+    )
+
+============================================================ 
+FILE: D:\SMF\main.py 
+============================================================ 
+import os
+import asyncio
+
+import discord
+
+from discord.ext import commands
+
+from config import TOKEN, PREFIX
+from database import init_database
+
+
+intents = discord.Intents.default()
+
+intents.message_content = True
+intents.members = True
+
+
+bot = commands.Bot(
+    command_prefix=PREFIX,
+    intents=intents,
+    help_command=None
+)
+
+
+@bot.event
+async def on_ready():
+
+    print("=" * 40)
+    print(f"[ONLINE] Logged in as {bot.user}")
+    print(f"[ID] {bot.user.id}")
+    print("=" * 40)
+
+
+async def load_modules():
+
+    for root, dirs, files in os.walk("modules"):
+
+        for file in files:
+
+            if not file.endswith(".py"):
+                continue
+
+
+            if file in [
+                "__init__.py",
+                "emoji.py"
+            ]:
+                continue
+
+
+            file_path = os.path.join(
+                root,
+                file
+            )
+
+
+            module_path = (
+                file_path[:-3]
+                .replace(os.sep, ".")
+            )
+
+
+            try:
+
+                await bot.load_extension(
+                    module_path
+                )
+
+                print(
+                    f"[OK] Loaded: {module_path}"
+                )
+
+
+            except Exception as error:
+
+                print(
+                    f"[ERROR] Failed to load: "
+                    f"{module_path}"
+                )
+
+                print(
+                    f"{type(error).__name__}: "
+                    f"{error}"
+                )
+
+
+async def main():
+
+    if not TOKEN:
+
+        print(
+            "[ERROR] DISCORD_TOKEN was not found."
+        )
+
+        return
+
+
+    init_database()
+
+
+    async with bot:
+
+        await load_modules()
+
+        await bot.start(TOKEN)
+
+
+if __name__ == "__main__":
+
+    try:
+
+        asyncio.run(main())
+
+    except KeyboardInterrupt:
+
+        print(
+            "\n[OFFLINE] Bot stopped."
+        )
+============================================================ 
+FILE: D:\SMF\owner_permissions.py 
+============================================================ 
+OWNER_ROLE_COMMANDS = {
+    "all",
+}
+============================================================ 
+FILE: D:\SMF\permissions.py 
+============================================================ 
+from discord.ext import commands
+
+from database import get_connection, get_owner_role
+from owner_permissions import OWNER_ROLE_COMMANDS
+
+
+# ============================================================
+# COMMAND NAME
+# ============================================================
+
+def normalize_command_name(command_name):
+
+    command_name = command_name.lower().strip()
+
+    if command_name.startswith("du"):
+        command_name = command_name[2:]
+
+    return command_name
+
+
+# ============================================================
+# SERVER OWNER
+# ============================================================
+
+def is_server_owner(ctx):
+
+    if not ctx.guild:
+        return False
+
+    return ctx.author.id == ctx.guild.owner_id
+
+
+# ============================================================
+# OWNER ROLE
+# ============================================================
+
+def has_owner_role(ctx):
+
+    if not ctx.guild:
+        return False
+
+    owner_role_id = get_owner_role(
+        ctx.guild.id
+    )
+
+    if owner_role_id is None:
+        return False
+
+    return any(
+        role.id == owner_role_id
+        for role in ctx.author.roles
+    )
+
+
+# ============================================================
+# OWNER ROLE PERMISSION
+# ============================================================
+
+def owner_role_can_use(command_name):
+
+    command_name = normalize_command_name(
+        command_name
+    )
+
+    # --------------------------------------------------------
+    # dusignowner is ALWAYS Server Owner only.
+    # --------------------------------------------------------
+
+    if command_name == "signowner":
+        return False
+
+    # --------------------------------------------------------
+    # "all" = all commands except dusignowner.
+    # --------------------------------------------------------
+
+    if "all" in OWNER_ROLE_COMMANDS:
+        return True
+
+    # --------------------------------------------------------
+    # Specific command
+    # --------------------------------------------------------
+
+    return command_name in {
+        normalize_command_name(name)
+        for name in OWNER_ROLE_COMMANDS
+    }
+
+
+# ============================================================
+# SIGNED ROLE PERMISSION
+# ============================================================
+
+def signed_role_can_use(ctx, command_name):
+
+    if not ctx.guild:
+        return False
+
+    command_name = normalize_command_name(
+        command_name
+    )
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT role_id, command_name
+
+        FROM command_permissions
+
+        WHERE guild_id = ?
+        AND (
+            command_name = ?
+            OR command_name = 'all'
+        )
+        """,
+        (
+            ctx.guild.id,
+            command_name
+        )
+    )
+
+    permissions = cursor.fetchall()
+
+    connection.close()
+
+    user_role_ids = {
+        role.id
+        for role in ctx.author.roles
+    }
+
+    for role_id, permission in permissions:
+
+        if role_id in user_role_ids:
+            return True
+
+    return False
+
+
+# ============================================================
+# PERMISSION ADMIN
+# ============================================================
+
+def has_permission_admin(ctx):
+    """
+    Permission administrator.
+
+    Allowed:
+    - Server Owner
+    - Owner Role
+    - Discord Administrator
+
+    NOT allowed:
+    - Normal signed roles
+    """
+
+    if not ctx.guild:
+        return False
+
+    # --------------------------------------------------------
+    # Server Owner
+    # --------------------------------------------------------
+
+    if is_server_owner(ctx):
+        return True
+
+    # --------------------------------------------------------
+    # Owner Role
+    # --------------------------------------------------------
+
+    if has_owner_role(ctx):
+        return True
+
+    # --------------------------------------------------------
+    # Discord Administrator
+    # --------------------------------------------------------
+
+    if ctx.author.guild_permissions.administrator:
+        return True
+
+    return False
+
+
+# ============================================================
+# PERMISSION ADMIN DECORATOR
+# ============================================================
+
+def permission_admin():
+
+    async def predicate(ctx):
+
+        allowed = has_permission_admin(ctx)
+
+        if not allowed:
+
+            await ctx.send(
+                "🔻 ❌ You do not have permission "
+                "to manage command permissions."
+            )
+
+        return allowed
+
+    return commands.check(predicate)
+
+
+# ============================================================
+# MAIN PERMISSION CHECK
+# ============================================================
+
+async def has_command_permission(ctx):
+
+    if not ctx.guild:
+        return False
+
+    command_name = normalize_command_name(
+        ctx.command.name
+    )
+
+    # ========================================================
+    # DUSIGNOWNER
+    # ========================================================
+    #
+    # ONLY SERVER OWNER.
+    #
+    # Administrator: NO
+    # Owner Role: NO
+    # Signed Role: NO
+    #
+
+    if command_name == "signowner":
+
+        return is_server_owner(ctx)
+
+    # ========================================================
+    # SERVER OWNER
+    # ========================================================
+
+    if is_server_owner(ctx):
+
+        return True
+
+    # ========================================================
+    # OWNER ROLE
+    # ========================================================
+
+    if has_owner_role(ctx):
+
+        return owner_role_can_use(
+            command_name
+        )
+
+    # ========================================================
+    # ADMINISTRATOR
+    # ========================================================
+    #
+    # Administrator can use normal commands.
+    #
+    # dusignowner was already handled above.
+    #
+
+    if ctx.author.guild_permissions.administrator:
+
+        return True
+
+    # ========================================================
+    # SIGNED ROLES
+    # ========================================================
+
+    if signed_role_can_use(
+        ctx,
+        command_name
+    ):
+
+        return True
+
+    # ========================================================
+    # DENIED
+    # ========================================================
+
+    return False
+
+
+# ============================================================
+# SIGNED PERMISSION DECORATOR
+# ============================================================
+
+def signed_permission():
+
+    async def predicate(ctx):
+
+        allowed = await has_command_permission(
+            ctx
+        )
+
+        if not allowed:
+
+            await ctx.send(
+                "🔻 ❌ You do not have permission "
+                "to use this command."
+            )
+
+        return allowed
+
+    return commands.check(predicate)
+============================================================ 
+FILE: D:\SMF\update_permissions.py 
+============================================================ 
+import os
+import re
+
+
+FOLDER = "modules/moderation"
+
+SKIP_FILES = [
+    "sign.py",
+    "unsign.py",
+    "__init__.py"
+]
+
+
+for filename in os.listdir(FOLDER):
+
+    if not filename.endswith(".py"):
+        continue
+
+    if filename in SKIP_FILES:
+        continue
+
+
+    filepath = os.path.join(
+        FOLDER,
+        filename
+    )
+
+
+    with open(
+        filepath,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
+        content = file.read()
+
+
+    # Replace Discord user permission checks
+    new_content = re.sub(
+        r'@commands\.has_permissions\([^)]*\)',
+        '@signed_permission()',
+        content
+    )
+
+
+    # Add the import if the file was changed
+    if new_content != content:
+
+        if (
+            "from permissions import signed_permission"
+            not in new_content
+        ):
+
+            new_content = (
+                "from permissions import signed_permission\n"
+                + new_content
+            )
+
+
+        with open(
+            filepath,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            file.write(
+                new_content
+            )
+
+
+        print(
+            f"[UPDATED] {filename}"
+        )
+
+    else:
+
+        print(
+            f"[SKIPPED] {filename}"
+        )
+
+
+print("\nDone.")
+============================================================ 
+FILE: D:\SMF\modules\emoji.py 
+============================================================ 
+EMOJIS = {
+
+    "hm": "<:Hm:1455917155211018260>",
+}.
+============================================================ 
+FILE: D:\SMF\modules\ping.py 
+============================================================ 
+import time
+
+from discord.ext import commands
+from modules.emoji import EMOJIS
+
+
+class PingModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    async def ping(self, ctx):
+
+        start_time = time.perf_counter()
+
+        latency = round(self.bot.latency * 1000)
+
+        message = await ctx.send(
+            f"Pong I think, let me see {EMOJIS['hm']}\n"
+            f"Gateway Ping: `{latency}ms`\n"
+            f"Calculating round trip, hold on..."
+        )
+
+        round_trip = round(
+            (time.perf_counter() - start_time) * 1000
+        )
+
+        await message.edit(
+            content=(
+                f"Pong I think, let me see {EMOJIS['hm']}\n"
+                f"Gateway Ping: `{latency}ms`\n"
+                f"Response Speed: `{round_trip}ms`"
+            )
+        )
+
+
+async def setup(bot):
+    await bot.add_cog(PingModule(bot)).
+============================================================ 
+FILE: D:\SMF\modules\moderation\ban.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+class BanModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(ban_members=True)
+    async def ban(
+        self,
+        ctx,
+        member: discord.Member,
+        *,
+        reason="No reason provided"
+    ):
+
+        # ========================================================
+        # PREVENT SELF BAN
+        # ========================================================
+
+        if member == ctx.author:
+
+            await ctx.send(
+                "🔻 ❌ You cannot ban yourself."
+            )
+
+            return
+
+        # ========================================================
+        # PREVENT SERVER OWNER BAN
+        # ========================================================
+
+        if member == ctx.guild.owner:
+
+            await ctx.send(
+                "🔻 ❌ You cannot ban the server owner."
+            )
+
+            return
+
+        # ========================================================
+        # MODERATOR ROLE HIERARCHY
+        # ========================================================
+
+        if (
+            ctx.author != ctx.guild.owner
+            and member.top_role >= ctx.author.top_role
+        ):
+
+            await ctx.send(
+                "🔻 ❌ You cannot ban a member "
+                "with an equal or higher role."
+            )
+
+            return
+
+        # ========================================================
+        # BOT ROLE HIERARCHY
+        # ========================================================
+
+        if member.top_role >= ctx.guild.me.top_role:
+
+            await ctx.send(
+                "🔻 ❌ My role is not high enough "
+                "to ban this member."
+            )
+
+            return
+
+        # ========================================================
+        # BAN
+        # ========================================================
+
+        try:
+
+            await member.ban(
+                reason=(
+                    f"{reason} | "
+                    f"Banned by {ctx.author}"
+                )
+            )
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to ban this member."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ An error occurred while trying "
+                "to ban this member."
+            )
+
+            return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog("ModLogModule")
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="ban",
+                target=member,
+                moderator=ctx.author,
+                reason=reason
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 🔨 {member.mention} has been banned.\n"
+            f"🔻 📝 Reason: {reason}"
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        BanModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\banlist.py 
+============================================================ 
+from permissions import signed_permission
+import math
+import discord
+
+from discord.ext import commands
+
+
+class BanListView(discord.ui.View):
+
+    def __init__(self, pages):
+        super().__init__(timeout=120)
+
+        self.pages = pages
+        self.current_page = 0
+
+        self.update_buttons()
+
+
+    def update_buttons(self):
+
+        self.previous_button.disabled = (
+            self.current_page == 0
+        )
+
+        self.next_button.disabled = (
+            self.current_page >= len(self.pages) - 1
+        )
+
+
+    @discord.ui.button(
+        label="⬅️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def previous_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        self.current_page -= 1
+
+        self.update_buttons()
+
+        await interaction.response.edit_message(
+            content=self.pages[self.current_page],
+            view=self
+        )
+
+
+    @discord.ui.button(
+        label="➡️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def next_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        self.current_page += 1
+
+        self.update_buttons()
+
+        await interaction.response.edit_message(
+            content=self.pages[self.current_page],
+            view=self
+        )
+
+
+class BanListModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    @signed_permission()
+    async def banlist(self, ctx):
+
+        bans = [
+            ban_entry
+            async for ban_entry
+            in ctx.guild.bans()
+        ]
+
+
+        if not bans:
+
+            await ctx.send(
+                "🔻 📋 The ban list is empty."
+            )
+
+            return
+
+
+        per_page = 10
+        pages = []
+
+        total_pages = math.ceil(
+            len(bans) / per_page
+        )
+
+
+        for page in range(total_pages):
+
+            start = page * per_page
+            end = start + per_page
+
+            ban_entries = bans[start:end]
+
+            content = (
+                f"🔻 📋 **Ban List — "
+                f"Page {page + 1}/{total_pages}**\n\n"
+            )
+
+
+            for index, ban_entry in enumerate(
+                ban_entries,
+                start=start + 1
+            ):
+
+                user = ban_entry.user
+
+                reason = (
+                    ban_entry.reason
+                    or "No reason provided"
+                )
+
+                username = (
+                    user.global_name
+                    or user.name
+                )
+
+                content += (
+                    f"🔻 `{index}.` **{username}**\n"
+                    f"🔻 🆔 ID: `{user.id}`\n"
+                    f"🔻 📝 Reason: {reason}\n\n"
+                )
+
+
+            pages.append(content)
+
+
+        view = BanListView(pages)
+
+        await ctx.send(
+            pages[0],
+            view=view
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        BanListModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\clearwarning.py 
+============================================================ 
+import os
+import sqlite3
+import discord
+
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+DATABASE = "data/smf.db"
+
+
+def initialize_database():
+
+    os.makedirs(
+        "data",
+        exist_ok=True
+    )
+
+    connection = sqlite3.connect(
+        DATABASE
+    )
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS warnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
+
+    connection.commit()
+    connection.close()
+
+
+class ClearWarningModule(commands.Cog):
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+        initialize_database()
+
+    @commands.command()
+    @signed_permission()
+    async def clearwarning(
+        self,
+        ctx,
+        member: discord.Member
+    ):
+
+        # ========================================================
+        # PREVENT SELF CLEAR
+        # ========================================================
+
+        if member == ctx.author:
+
+            await ctx.send(
+                "🔻 ❌ You cannot clear your own warnings."
+            )
+
+            return
+
+        # ========================================================
+        # DATABASE
+        # ========================================================
+
+        connection = sqlite3.connect(
+            DATABASE
+        )
+
+        try:
+
+            cursor = connection.cursor()
+
+            # ====================================================
+            # COUNT WARNINGS
+            # ====================================================
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM warnings
+                WHERE guild_id = ?
+                AND user_id = ?
+                """,
+                (
+                    ctx.guild.id,
+                    member.id
+                )
+            )
+
+            warning_count = cursor.fetchone()[0]
+
+            if warning_count == 0:
+
+                await ctx.send(
+                    f"🔻 ❌ {member.mention} has no warnings."
+                )
+
+                return
+
+            # ====================================================
+            # DELETE WARNINGS
+            # ====================================================
+
+            cursor.execute(
+                """
+                DELETE FROM warnings
+                WHERE guild_id = ?
+                AND user_id = ?
+                """,
+                (
+                    ctx.guild.id,
+                    member.id
+                )
+            )
+
+            connection.commit()
+
+        finally:
+
+            connection.close()
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog(
+            "ModLogModule"
+        )
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="clearwarning",
+                target=member,
+                moderator=ctx.author,
+                details=(
+                    f"Warnings cleared: `{warning_count}`"
+                )
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 ✅ Cleared `{warning_count}` warning(s) "
+            f"from {member.mention}."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        ClearWarningModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\kick.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+class KickModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(kick_members=True)
+    async def kick(
+        self,
+        ctx,
+        member: discord.Member,
+        *,
+        reason="No reason provided"
+    ):
+
+        # ========================================================
+        # PREVENT SELF KICK
+        # ========================================================
+
+        if member == ctx.author:
+
+            await ctx.send(
+                "🔻 ❌ You cannot kick yourself."
+            )
+
+            return
+
+        # ========================================================
+        # PREVENT SERVER OWNER KICK
+        # ========================================================
+
+        if member == ctx.guild.owner:
+
+            await ctx.send(
+                "🔻 ❌ You cannot kick the server owner."
+            )
+
+            return
+
+        # ========================================================
+        # MODERATOR ROLE HIERARCHY
+        # ========================================================
+
+        if (
+            ctx.author != ctx.guild.owner
+            and member.top_role >= ctx.author.top_role
+        ):
+
+            await ctx.send(
+                "🔻 ❌ You cannot kick a member "
+                "with an equal or higher role."
+            )
+
+            return
+
+        # ========================================================
+        # BOT ROLE HIERARCHY
+        # ========================================================
+
+        if member.top_role >= ctx.guild.me.top_role:
+
+            await ctx.send(
+                "🔻 ❌ My role is not high enough "
+                "to kick this member."
+            )
+
+            return
+
+        # ========================================================
+        # KICK
+        # ========================================================
+
+        try:
+
+            await member.kick(
+                reason=(
+                    f"{reason} | "
+                    f"Kicked by {ctx.author}"
+                )
+            )
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to kick this member."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ An error occurred while trying "
+                "to kick this member."
+            )
+
+            return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog("ModLogModule")
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="kick",
+                target=member,
+                moderator=ctx.author,
+                reason=reason
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 👢 {member.mention} has been kicked.\n"
+            f"🔻 📝 Reason: {reason}"
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        KickModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\lock.py 
+============================================================ 
+from permissions import signed_permission
+import discord
+from discord.ext import commands
+
+
+class LockModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        manage_channels=True
+    )
+    async def lock(
+        self,
+        ctx
+    ):
+
+        overwrite = ctx.channel.overwrites_for(
+            ctx.guild.default_role
+        )
+
+        overwrite.send_messages = False
+
+
+        await ctx.channel.set_permissions(
+            ctx.guild.default_role,
+            overwrite=overwrite,
+            reason=(
+                f"Channel locked by {ctx.author}"
+            )
+        )
+
+
+        await ctx.send(
+            "🔻 🔒 This channel has been locked."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        LockModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\modlog.py 
+============================================================ 
+import discord
+
+from discord.ext import commands, tasks
+
+from database import (
+    get_modlog_channels,
+    add_modlog_channel,
+    is_modlog_channel,
+    is_modlog_command_disabled,
+    disable_modlog_command,
+    enable_modlog_command,
+)
+
+
+class ModLogModule(commands.Cog):
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+        # ========================================================
+        # AUDIT LOG CACHE
+        # ========================================================
+
+        self.last_audit_log_ids = {}
+
+        # ========================================================
+        # START AUDIT LOG WATCHER
+        # ========================================================
+
+        self.audit_log_watcher.start()
+
+    # ============================================================
+    # CLEANUP
+    # ============================================================
+
+    def cog_unload(self):
+
+        self.audit_log_watcher.cancel()
+
+    # ============================================================
+    # BOT MESSAGE
+    # ============================================================
+
+    @staticmethod
+    def bot_message(text):
+
+        return f"🔻 {text}"
+
+    # ============================================================
+    # ACTION TITLES
+    # ============================================================
+
+    ACTION_TITLES = {
+
+        "ban": "Member Banned",
+        "unban": "Member Unbanned",
+        "kick": "Member Kicked",
+
+        "timeout": "Member Timed Out",
+        "untimeout": "Timeout Removed",
+
+        "warn": "Member Warned",
+        "unwarn": "Warning Removed",
+        "clearwarning": "Warnings Cleared",
+
+        "purge": "Messages Purged",
+        "slowmode": "Slowmode Updated",
+
+        "channel_create": "Channel Created",
+        "channel_update": "Channel Updated",
+        "channel_delete": "Channel Deleted",
+
+        "role_create": "Role Created",
+        "role_update": "Role Updated",
+        "role_delete": "Role Deleted",
+
+        "message_delete": "Message Deleted",
+        "message_bulk_delete": "Messages Bulk Deleted",
+
+        "message_pin": "Message Pinned",
+        "message_unpin": "Message Unpinned",
+
+        "member_update": "Member Updated",
+
+        "guild_update": "Server Updated",
+
+        "webhook_create": "Webhook Created",
+        "webhook_update": "Webhook Updated",
+        "webhook_delete": "Webhook Deleted",
+
+        "emoji_create": "Emoji Created",
+        "emoji_update": "Emoji Updated",
+        "emoji_delete": "Emoji Deleted",
+    }
+
+    # ============================================================
+    # AUDIT LOG ACTION NAMES
+    # ============================================================
+
+    AUDIT_ACTION_NAMES = {
+
+        discord.AuditLogAction.ban:
+            "ban",
+
+        discord.AuditLogAction.unban:
+            "unban",
+
+        discord.AuditLogAction.kick:
+            "kick",
+
+        discord.AuditLogAction.member_update:
+            "member_update",
+
+        discord.AuditLogAction.channel_create:
+            "channel_create",
+
+        discord.AuditLogAction.channel_update:
+            "channel_update",
+
+        discord.AuditLogAction.channel_delete:
+            "channel_delete",
+
+        discord.AuditLogAction.role_create:
+            "role_create",
+
+        discord.AuditLogAction.role_update:
+            "role_update",
+
+        discord.AuditLogAction.role_delete:
+            "role_delete",
+
+        discord.AuditLogAction.message_delete:
+            "message_delete",
+
+        discord.AuditLogAction.message_bulk_delete:
+            "message_bulk_delete",
+
+        discord.AuditLogAction.message_pin:
+            "message_pin",
+
+        discord.AuditLogAction.message_unpin:
+            "message_unpin",
+
+        discord.AuditLogAction.guild_update:
+            "guild_update",
+
+        discord.AuditLogAction.webhook_create:
+            "webhook_create",
+
+        discord.AuditLogAction.webhook_update:
+            "webhook_update",
+
+        discord.AuditLogAction.webhook_delete:
+            "webhook_delete",
+
+        discord.AuditLogAction.emoji_create:
+            "emoji_create",
+
+        discord.AuditLogAction.emoji_update:
+            "emoji_update",
+
+        discord.AuditLogAction.emoji_delete:
+            "emoji_delete",
+    }
+
+    # ============================================================
+    # GET ACTION TITLE
+    # ============================================================
+
+    def get_action_title(self, action):
+
+        return self.ACTION_TITLES.get(
+            action,
+            action.replace("_", " ").title()
+        )
+
+    # ============================================================
+    # FORMAT USER
+    # ============================================================
+
+    @staticmethod
+    def format_user(user):
+
+        if user is None:
+            return "Unknown"
+
+        mention = getattr(
+            user,
+            "mention",
+            str(user)
+        )
+
+        user_id = getattr(
+            user,
+            "id",
+            "Unknown"
+        )
+
+        return (
+            f"{mention} `{user_id}`"
+        )
+
+    # ============================================================
+    # CREATE EMBED
+    # ============================================================
+
+    def create_embed(
+        self,
+        action,
+        target=None,
+        moderator=None,
+        reason=None,
+        details=None
+    ):
+
+        title = self.get_action_title(
+            action
+        )
+
+        embed = discord.Embed(
+            title=f"🔻 {title}",
+            timestamp=discord.utils.utcnow()
+        )
+
+        # ========================================================
+        # TARGET
+        # ========================================================
+
+        if target is not None:
+
+            embed.add_field(
+                name="User",
+                value=self.format_user(target),
+                inline=False
+            )
+
+        # ========================================================
+        # MODERATOR
+        # ========================================================
+
+        if moderator is not None:
+
+            embed.add_field(
+                name="Moderator",
+                value=self.format_user(moderator),
+                inline=False
+            )
+
+        # ========================================================
+        # REASON
+        # ========================================================
+
+        if reason:
+
+            embed.add_field(
+                name="Reason",
+                value=str(reason)[:1024],
+                inline=False
+            )
+
+        # ========================================================
+        # DETAILS
+        # ========================================================
+
+        if details:
+
+            embed.add_field(
+                name="Details",
+                value=str(details)[:1024],
+                inline=False
+            )
+
+        # ========================================================
+        # FOOTER
+        # ========================================================
+
+        embed.set_footer(
+            text=f"Action: {action}"
+        )
+
+        return embed
+
+    # ============================================================
+    # SEND LOG
+    #
+    # THIS FUNCTION SENDS THE ACTUAL EMBED.
+    # ============================================================
+
+    async def send_log(
+        self,
+        guild,
+        action,
+        target=None,
+        moderator=None,
+        reason=None,
+        details=None
+    ):
+
+        if guild is None:
+            return
+
+        rows = get_modlog_channels(
+            guild.id
+        )
+
+        if not rows:
+            return
+
+        embed = self.create_embed(
+            action=action,
+            target=target,
+            moderator=moderator,
+            reason=reason,
+            details=details
+        )
+
+        # ========================================================
+        # SEND TO ALL MODLOG CHANNELS
+        # ========================================================
+
+        for row in rows:
+
+            channel_id = row["channel_id"]
+
+            # ====================================================
+            # COMMAND FILTER
+            # ====================================================
+
+            if is_modlog_command_disabled(
+                guild.id,
+                channel_id,
+                action
+            ):
+                continue
+
+            channel = guild.get_channel(
+                channel_id
+            )
+
+            if channel is None:
+                continue
+
+            try:
+
+                await channel.send(
+                    embed=embed
+                )
+
+            except (
+                discord.Forbidden,
+                discord.NotFound,
+                discord.HTTPException
+            ):
+
+                continue
+
+    # ============================================================
+    # PUBLIC LOGGER
+    #
+    # USED BY:
+    #
+    # ban.py
+    # unban.py
+    # kick.py
+    # timeout.py
+    # untimeout.py
+    # warn.py
+    # unwarn.py
+    # clearwarning.py
+    # purge.py
+    # slowmode.py
+    #
+    # ============================================================
+
+    async def log_action(
+        self,
+        guild,
+        action,
+        target=None,
+        moderator=None,
+        reason=None,
+        details=None
+    ):
+
+        await self.send_log(
+            guild=guild,
+            action=action,
+            target=target,
+            moderator=moderator,
+            reason=reason,
+            details=details
+        )
+
+    # ============================================================
+    # DETECT TIMEOUT
+    # ============================================================
+
+    @staticmethod
+    def is_timeout_entry(entry):
+
+        if entry.action != discord.AuditLogAction.member_update:
+            return False
+
+        before = getattr(
+            entry,
+            "before",
+            None
+        )
+
+        after = getattr(
+            entry,
+            "after",
+            None
+        )
+
+        if before is None or after is None:
+            return False
+
+        before_timeout = getattr(
+            before,
+            "timed_out_until",
+            None
+        )
+
+        after_timeout = getattr(
+            after,
+            "timed_out_until",
+            None
+        )
+
+        return before_timeout != after_timeout
+
+    # ============================================================
+    # GET AUDIT ACTION NAME
+    # ============================================================
+
+    def get_audit_action_name(self, entry):
+
+        # ========================================================
+        # TIMEOUT / UNTIMEOUT
+        # ========================================================
+
+        if self.is_timeout_entry(entry):
+
+            before = getattr(
+                entry.before,
+                "timed_out_until",
+                None
+            )
+
+            after = getattr(
+                entry.after,
+                "timed_out_until",
+                None
+            )
+
+            if before is None and after is not None:
+
+                return "timeout"
+
+            if before is not None and after is None:
+
+                return "untimeout"
+
+            return None
+
+        # ========================================================
+        # NORMAL AUDIT ACTION
+        # ========================================================
+
+        return self.AUDIT_ACTION_NAMES.get(
+            entry.action
+        )
+
+    # ============================================================
+    # PROCESS AUDIT ENTRY
+    # ============================================================
+
+    async def process_audit_entry(
+        self,
+        entry
+    ):
+
+        action = self.get_audit_action_name(
+            entry
+        )
+
+        if action is None:
+            return
+
+        guild = entry.guild
+
+        if guild is None:
+            return
+
+        # ========================================================
+        # TARGET
+        # ========================================================
+
+        target = entry.target
+
+        # ========================================================
+        # MODERATOR
+        # ========================================================
+
+        moderator = entry.user
+
+        # ========================================================
+        # REASON
+        # ========================================================
+
+        reason = entry.reason
+
+        # ========================================================
+        # DETAILS
+        # ========================================================
+
+        details = None
+
+        # ========================================================
+        # TIMEOUT
+        # ========================================================
+
+        if action == "timeout":
+
+            after = getattr(
+                entry,
+                "after",
+                None
+            )
+
+            timeout_until = getattr(
+                after,
+                "timed_out_until",
+                None
+            )
+
+            if timeout_until:
+
+                details = (
+                    "Until: "
+                    f"<t:{int(timeout_until.timestamp())}:F>"
+                )
+
+        # ========================================================
+        # UNTIMEOUT
+        # ========================================================
+
+        elif action == "untimeout":
+
+            details = (
+                "The timeout was removed."
+            )
+
+        # ========================================================
+        # SEND EMBED
+        # ========================================================
+
+        await self.send_log(
+            guild=guild,
+            action=action,
+            target=target,
+            moderator=moderator,
+            reason=reason,
+            details=details
+        )
+
+    # ============================================================
+    # AUDIT LOG WATCHER
+    #
+    # Detects actions performed by:
+    #
+    # - This bot
+    # - Dyno
+    # - Other bots
+    # - Human moderators
+    #
+    # ============================================================
+
+    @tasks.loop(seconds=2)
+    async def audit_log_watcher(self):
+
+        await self.bot.wait_until_ready()
+
+        for guild in self.bot.guilds:
+
+            try:
+
+                rows = get_modlog_channels(
+                    guild.id
+                )
+
+                if not rows:
+                    continue
+
+                latest_entries = []
+
+                async for entry in guild.audit_logs(
+                    limit=20
+                ):
+
+                    latest_entries.append(
+                        entry
+                    )
+
+                if not latest_entries:
+                    continue
+
+                latest_entries.reverse()
+
+                # =================================================
+                # FIRST RUN
+                #
+                # Do not send old Audit Log entries.
+                # =================================================
+
+                if guild.id not in self.last_audit_log_ids:
+
+                    self.last_audit_log_ids[
+                        guild.id
+                    ] = max(
+                        entry.id
+                        for entry in latest_entries
+                    )
+
+                    continue
+
+                last_id = self.last_audit_log_ids[
+                    guild.id
+                ]
+
+                # =================================================
+                # FIND NEW ENTRIES
+                # =================================================
+
+                new_entries = [
+                    entry
+                    for entry in latest_entries
+                    if entry.id > last_id
+                ]
+
+                # =================================================
+                # UPDATE CACHE
+                # =================================================
+
+                self.last_audit_log_ids[
+                    guild.id
+                ] = max(
+                    entry.id
+                    for entry in latest_entries
+                )
+
+                # =================================================
+                # PROCESS NEW ENTRIES
+                # =================================================
+
+                for entry in new_entries:
+
+                    try:
+
+                        await self.process_audit_entry(
+                            entry
+                        )
+
+                    except Exception as error:
+
+                        print(
+                            f"[ModLog] Failed to process "
+                            f"audit entry {entry.id}: {error}"
+                        )
+
+            except discord.Forbidden:
+
+                continue
+
+            except discord.HTTPException:
+
+                continue
+
+            except Exception as error:
+
+                print(
+                    f"[ModLog] Audit watcher error "
+                    f"in {guild.name}: {error}"
+                )
+
+    # ============================================================
+    # LOOP READY
+    # ============================================================
+
+    @audit_log_watcher.before_loop
+    async def before_audit_log_watcher(self):
+
+        await self.bot.wait_until_ready()
+
+    # ============================================================
+    # MODLOG COMMAND
+    #
+    # dumodlog
+    # dumodlog #channel
+    # dumodlog on ban #channel
+    # dumodlog off ban #channel
+    #
+    # ============================================================
+
+    @commands.command(
+        name="modlog"
+    )
+    @commands.guild_only()
+    async def modlog(
+        self,
+        ctx,
+        action=None,
+        command_name=None,
+        channel: discord.TextChannel = None
+    ):
+
+        # ========================================================
+        # dumodlog
+        #
+        # VIEW MODLOG CHANNELS
+        # ========================================================
+
+        if action is None:
+
+            rows = get_modlog_channels(
+                ctx.guild.id
+            )
+
+            if not rows:
+
+                await ctx.send(
+                    self.bot_message(
+                        "There are currently no channels "
+                        "with ModLog enabled."
+                    )
+                )
+
+                return
+
+            channels = []
+
+            for row in rows:
+
+                target_channel = ctx.guild.get_channel(
+                    row["channel_id"]
+                )
+
+                if target_channel:
+
+                    channels.append(
+                        target_channel.mention
+                    )
+
+            if not channels:
+
+                await ctx.send(
+                    self.bot_message(
+                        "There are currently no channels "
+                        "with ModLog enabled."
+                    )
+                )
+
+                return
+
+            await ctx.send(
+                self.bot_message(
+                    "**Channels with ModLog:**\n"
+                    + "\n".join(
+                        f"• {item}"
+                        for item in channels
+                    )
+                )
+            )
+
+            return
+
+        # ========================================================
+        # dumodlog #channel
+        #
+        # ENABLE MODLOG
+        # ========================================================
+
+        if (
+            action.startswith("<#")
+            and action.endswith(">")
+        ):
+
+            try:
+
+                channel_id = int(
+                    action[2:-1]
+                )
+
+            except ValueError:
+
+                await ctx.send(
+                    self.bot_message(
+                        "Invalid channel."
+                    )
+                )
+
+                return
+
+            target_channel = ctx.guild.get_channel(
+                channel_id
+            )
+
+            if target_channel is None:
+
+                await ctx.send(
+                    self.bot_message(
+                        "I could not find that channel."
+                    )
+                )
+
+                return
+
+            if is_modlog_channel(
+                ctx.guild.id,
+                target_channel.id
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"{target_channel.mention} "
+                        "already has ModLog enabled."
+                    )
+                )
+
+                return
+
+            add_modlog_channel(
+                ctx.guild.id,
+                target_channel.id
+            )
+
+            await ctx.send(
+                self.bot_message(
+                    f"ModLog has been enabled in "
+                    f"{target_channel.mention}."
+                )
+            )
+
+            return
+
+        # ========================================================
+        # dumodlog on [command] #channel
+        # ========================================================
+
+        if action.lower() == "on":
+
+            if (
+                command_name is None
+                or channel is None
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        "Usage: "
+                        "`dumodlog on [command] #channel`"
+                    )
+                )
+
+                return
+
+            if not is_modlog_channel(
+                ctx.guild.id,
+                channel.id
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"{channel.mention} does not have "
+                        "ModLog enabled."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # REMOVE PREFIX
+            #
+            # duBan -> ban
+            # duban -> ban
+            # ban -> ban
+            # ====================================================
+
+            command_name = command_name.lower()
+
+            if command_name.startswith("du"):
+
+                command_name = command_name[2:]
+
+            if not command_name:
+
+                await ctx.send(
+                    self.bot_message(
+                        "Invalid command name."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # ALREADY ENABLED
+            # ====================================================
+
+            if not is_modlog_command_disabled(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"Logging for `{command_name}` is "
+                        "already enabled."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # ENABLE
+            # ====================================================
+
+            enable_modlog_command(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            )
+
+            await ctx.send(
+                self.bot_message(
+                    f"Logging for `{command_name}` has been "
+                    f"enabled in {channel.mention}."
+                )
+            )
+
+            return
+
+        # ========================================================
+        # dumodlog off [command] #channel
+        # ========================================================
+
+        if action.lower() == "off":
+
+            if (
+                command_name is None
+                or channel is None
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        "Usage: "
+                        "`dumodlog off [command] #channel`"
+                    )
+                )
+
+                return
+
+            if not is_modlog_channel(
+                ctx.guild.id,
+                channel.id
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"{channel.mention} does not have "
+                        "ModLog enabled."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # REMOVE PREFIX
+            # ====================================================
+
+            command_name = command_name.lower()
+
+            if command_name.startswith("du"):
+
+                command_name = command_name[2:]
+
+            if not command_name:
+
+                await ctx.send(
+                    self.bot_message(
+                        "Invalid command name."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # ALREADY DISABLED
+            # ====================================================
+
+            if is_modlog_command_disabled(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            ):
+
+                await ctx.send(
+                    self.bot_message(
+                        f"Logging for `{command_name}` is already "
+                        f"disabled in {channel.mention}."
+                    )
+                )
+
+                return
+
+            # ====================================================
+            # DISABLE
+            # ====================================================
+
+            disable_modlog_command(
+                ctx.guild.id,
+                channel.id,
+                command_name
+            )
+
+            await ctx.send(
+                self.bot_message(
+                    f"Logging for `{command_name}` has been "
+                    f"disabled in {channel.mention}."
+                )
+            )
+
+            return
+
+        # ========================================================
+        # INVALID USAGE
+        # ========================================================
+
+        await ctx.send(
+            self.bot_message(
+                "**Invalid ModLog command.**\n\n"
+
+                "`dumodlog` — View ModLog channels\n"
+
+                "`dumodlog #channel` — Enable ModLog "
+                "in a channel\n"
+
+                "`dumodlog on [command] #channel` — "
+                "Enable logging for a command\n"
+
+                "`dumodlog off [command] #channel` — "
+                "Disable logging for a command"
+            )
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        ModLogModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\nickname.py 
+============================================================ 
+from permissions import signed_permission
+import discord
+from discord.ext import commands
+
+
+class NicknameModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        manage_nicknames=True
+    )
+    async def nickname(
+        self,
+        ctx,
+        member: discord.Member,
+        *,
+        nickname=None
+    ):
+
+        if member == ctx.guild.owner:
+
+            await ctx.send(
+                "🔻 ❌ You cannot change the server owner's nickname."
+            )
+
+            return
+
+
+        if (
+            ctx.author != ctx.guild.owner
+            and member.top_role >= ctx.author.top_role
+        ):
+
+            await ctx.send(
+                "🔻 ❌ You cannot change the nickname of a member "
+                "with an equal or higher role."
+            )
+
+            return
+
+
+        if member.top_role >= ctx.guild.me.top_role:
+
+            await ctx.send(
+                "🔻 ❌ My role is not high enough "
+                "to change this member's nickname."
+            )
+
+            return
+
+
+        try:
+
+            await member.edit(
+                nick=nickname,
+                reason=(
+                    f"Nickname changed by {ctx.author}"
+                )
+            )
+
+
+            if nickname is None:
+
+                await ctx.send(
+                    f"🔻 ✅ Reset {member.mention}'s nickname."
+                )
+
+            else:
+
+                await ctx.send(
+                    f"🔻 ✅ Changed {member.mention}'s nickname "
+                    f"to `{nickname}`."
+                )
+
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to change this member's nickname."
+            )
+
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ Failed to change this member's nickname."
+            )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        NicknameModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\purge.py 
+============================================================ 
+import discord
+
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+class PurgeModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        manage_messages=True
+    )
+    async def purge(
+        self,
+        ctx,
+        amount: int,
+        member: discord.Member = None
+    ):
+
+        # ========================================================
+        # VALIDATE AMOUNT
+        # ========================================================
+
+        if amount <= 0:
+
+            await ctx.send(
+                "🔻 ❌ The amount must be greater than 0."
+            )
+
+            return
+
+        if amount > 100:
+
+            await ctx.send(
+                "🔻 ❌ You can purge a maximum of "
+                "100 messages at once."
+            )
+
+            return
+
+        # ========================================================
+        # PURGE ALL MESSAGES
+        # ========================================================
+
+        if member is None:
+
+            try:
+
+                deleted = await ctx.channel.purge(
+                    limit=amount + 1
+                )
+
+            except discord.Forbidden:
+
+                await ctx.send(
+                    "🔻 ❌ I do not have permission "
+                    "to delete messages."
+                )
+
+                return
+
+            except discord.HTTPException:
+
+                await ctx.send(
+                    "🔻 ❌ An error occurred while "
+                    "deleting messages."
+                )
+
+                return
+
+            # The command itself is included.
+            deleted_count = max(
+                0,
+                len(deleted) - 1
+            )
+
+        # ========================================================
+        # PURGE MESSAGES FROM SPECIFIC MEMBER
+        # ========================================================
+
+        else:
+
+            messages_to_delete = []
+
+            async for message in ctx.channel.history(
+                limit=None,
+                oldest_first=False
+            ):
+
+                # Do not count command message.
+                if message.id == ctx.message.id:
+                    continue
+
+                if message.author.id == member.id:
+
+                    messages_to_delete.append(
+                        message
+                    )
+
+                if len(messages_to_delete) >= amount:
+                    break
+
+            # ====================================================
+            # NOTHING FOUND
+            # ====================================================
+
+            if not messages_to_delete:
+
+                await ctx.send(
+                    f"🔻 ❌ No messages from "
+                    f"{member.mention} were found."
+                )
+
+                return
+
+            deleted_count = len(
+                messages_to_delete
+            )
+
+            # ====================================================
+            # DELETE COMMAND
+            # ====================================================
+
+            try:
+
+                await ctx.message.delete()
+
+            except discord.HTTPException:
+
+                pass
+
+            # ====================================================
+            # DELETE MESSAGES
+            # ====================================================
+
+            try:
+
+                await ctx.channel.delete_messages(
+                    messages_to_delete
+                )
+
+            except discord.Forbidden:
+
+                await ctx.send(
+                    "🔻 ❌ I do not have permission "
+                    "to delete these messages."
+                )
+
+                return
+
+            except discord.HTTPException:
+
+                await ctx.send(
+                    "🔻 ❌ An error occurred while "
+                    "deleting messages."
+                )
+
+                return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog(
+            "ModLogModule"
+        )
+
+        if logger:
+
+            if member is None:
+
+                details = (
+                    f"Deleted messages: `{deleted_count}`\n"
+                    f"Channel: {ctx.channel.mention}"
+                )
+
+            else:
+
+                details = (
+                    f"Deleted messages: `{deleted_count}`\n"
+                    f"Message author: {member.mention}\n"
+                    f"Channel: {ctx.channel.mention}"
+                )
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="purge",
+                target=member,
+                moderator=ctx.author,
+                details=details
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        confirmation = await ctx.send(
+            f"🔻 🗑️ Deleted `{deleted_count}` "
+            f"message(s)."
+        )
+
+        await confirmation.delete(
+            delay=5
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        PurgeModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\sign.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from database import get_connection
+from permissions import permission_admin
+
+
+class SignModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    # ========================================================
+    # SIGN
+    # ========================================================
+
+    @commands.command()
+    @permission_admin()
+    async def sign(
+        self,
+        ctx,
+        role: discord.Role,
+        command_name: str
+    ):
+
+        # ====================================================
+        # ROLE HIERARCHY
+        # ====================================================
+        #
+        # Server Owner:
+        #   Can manage any role.
+        #
+        # Everyone else with permission_admin:
+        #   Can only manage roles BELOW their highest role.
+        #
+
+        if not ctx.guild:
+            return
+
+        is_server_owner = (
+            ctx.author.id == ctx.guild.owner_id
+        )
+
+        if not is_server_owner:
+
+            if role >= ctx.author.top_role:
+
+                await ctx.send(
+                    "🔻 ❌ You can only manage roles "
+                    "below your highest role."
+                )
+
+                return
+
+        # ====================================================
+        # NORMALIZE COMMAND NAME
+        # ====================================================
+
+        command_name = command_name.lower().strip()
+
+        # Remove "du" prefix.
+
+        if command_name != "all":
+
+            if command_name.startswith("du"):
+
+                command_name = command_name[2:]
+
+        # ====================================================
+        # EMPTY COMMAND CHECK
+        # ====================================================
+
+        if not command_name:
+
+            await ctx.send(
+                "🔻 ❌ You must specify a command."
+            )
+
+            return
+
+        # ====================================================
+        # DUSIGNOWNER CANNOT BE SIGNED
+        # ====================================================
+
+        if command_name == "signowner":
+
+            await ctx.send(
+                "🔻 ❌ `dusignowner` can only be used "
+                "by the server owner."
+            )
+
+            return
+
+        # ====================================================
+        # CHECK COMMAND EXISTS
+        # ====================================================
+
+        if command_name != "all":
+
+            command = self.bot.get_command(
+                command_name
+            )
+
+            if command is None:
+
+                await ctx.send(
+                    "🔻 ❌ That command does not exist."
+                )
+
+                return
+
+        # ====================================================
+        # DATABASE
+        # ====================================================
+
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        # ====================================================
+        # CHECK EXISTING PERMISSION
+        # ====================================================
+
+        cursor.execute(
+            """
+            SELECT 1
+            FROM command_permissions
+            WHERE guild_id = ?
+            AND role_id = ?
+            AND command_name = ?
+            """,
+            (
+                ctx.guild.id,
+                role.id,
+                command_name
+            )
+        )
+
+        existing = cursor.fetchone()
+
+        if existing is not None:
+
+            connection.close()
+
+            await ctx.send(
+                f"🔻 ❌ {role.mention} is already "
+                f"signed for `{command_name}`."
+            )
+
+            return
+
+        # ====================================================
+        # ADD PERMISSION
+        # ====================================================
+
+        cursor.execute(
+            """
+            INSERT INTO command_permissions (
+                guild_id,
+                role_id,
+                command_name
+            )
+            VALUES (?, ?, ?)
+            """,
+            (
+                ctx.guild.id,
+                role.id,
+                command_name
+            )
+        )
+
+        connection.commit()
+        connection.close()
+
+        # ====================================================
+        # SUCCESS
+        # ====================================================
+
+        if command_name == "all":
+
+            await ctx.send(
+                f"🔻 ✅ {role.mention} can now use "
+                "all signed moderation commands."
+            )
+
+        else:
+
+            await ctx.send(
+                f"🔻 ✅ {role.mention} can now use "
+                f"`du{command_name}`."
+            )
+
+
+# ============================================================
+# SETUP
+# ============================================================
+
+async def setup(bot):
+
+    await bot.add_cog(
+        SignModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\signlist.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from database import get_connection
+from permissions import permission_admin
+
+
+class SignListModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    # ========================================================
+    # SIGN LIST
+    # ========================================================
+
+    @commands.command()
+    @permission_admin()
+    async def signlist(
+        self,
+        ctx,
+        role: discord.Role
+    ):
+
+        # ====================================================
+        # ROLE HIERARCHY
+        # ====================================================
+        #
+        # Server Owner:
+        #   Can view any role.
+        #
+        # Permission Administrator / Owner Role:
+        #   Can view roles below OR equal to their top role.
+        #
+        # Higher roles:
+        #   Cannot view.
+        #
+
+        if not ctx.guild:
+            return
+
+        is_server_owner = (
+            ctx.author.id == ctx.guild.owner_id
+        )
+
+        if not is_server_owner:
+
+            if role > ctx.author.top_role:
+
+                await ctx.send(
+                    "🔻 ❌ You can only view permissions "
+                    "of roles at or below your highest role."
+                )
+
+                return
+
+        # ====================================================
+        # DATABASE
+        # ====================================================
+
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT command_name
+            FROM command_permissions
+            WHERE guild_id = ?
+            AND role_id = ?
+            ORDER BY command_name ASC
+            """,
+            (
+                ctx.guild.id,
+                role.id
+            )
+        )
+
+        permissions = cursor.fetchall()
+
+        connection.close()
+
+        # ====================================================
+        # NO PERMISSIONS
+        # ====================================================
+
+        if not permissions:
+
+            await ctx.send(
+                f"🔻 📋 {role.mention} has no signed commands."
+            )
+
+            return
+
+        # ====================================================
+        # BUILD COMMAND LIST
+        # ====================================================
+
+        command_list = []
+
+        for permission in permissions:
+
+            command_name = permission[0]
+
+            if command_name == "all":
+
+                command_list.append(
+                    "🔻 `all` — All signed moderation commands"
+                )
+
+            else:
+
+                command_list.append(
+                    f"🔻 `du{command_name}`"
+                )
+
+        # ====================================================
+        # SEND
+        # ====================================================
+
+        await ctx.send(
+            f"🔻 📋 **Signed commands for "
+            f"{role.mention}:**\n\n"
+            + "\n".join(command_list)
+        )
+
+
+# ============================================================
+# SETUP
+# ============================================================
+
+async def setup(bot):
+
+    await bot.add_cog(
+        SignListModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\signowner.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from database import get_owner_role, set_owner_role
+
+
+class SignOwnerModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    async def signowner(
+        self,
+        ctx,
+        role: discord.Role
+    ):
+
+        # ========================================================
+        # GUILD CHECK
+        # ========================================================
+
+        if not ctx.guild:
+            return
+
+
+        # ========================================================
+        # ONLY SERVER OWNER
+        # ========================================================
+
+        if ctx.author.id != ctx.guild.owner_id:
+
+            await ctx.send(
+                "🔻 ❌ Only the server owner can use "
+                "`dusignowner`."
+            )
+
+            return
+
+
+        # ========================================================
+        # ROLE VALIDATION
+        # ========================================================
+
+        # Cannot use @everyone
+        if role.is_default():
+
+            await ctx.send(
+                "🔻 ❌ You cannot use @everyone "
+                "as the Owner Role."
+            )
+
+            return
+
+
+        # Cannot use managed/integration roles
+        if role.managed:
+
+            await ctx.send(
+                "🔻 ❌ You cannot use a managed/integration "
+                "role as the Owner Role."
+            )
+
+            return
+
+
+        # ========================================================
+        # NO ROLE HIERARCHY CHECK
+        # ========================================================
+        #
+        # Server Owner can select ANY normal role.
+        #
+        # Do NOT check:
+        #
+        #     role >= ctx.author.top_role
+        #
+        # because the server owner is above the normal
+        # role hierarchy for permission purposes.
+        #
+
+
+        # ========================================================
+        # CURRENT OWNER ROLE
+        # ========================================================
+
+        current_role_id = get_owner_role(
+            ctx.guild.id
+        )
+
+
+        # Already the Owner Role
+        if current_role_id == role.id:
+
+            await ctx.send(
+                f"🔻 ❌ {role.mention} is already "
+                "the Owner Role."
+            )
+
+            return
+
+
+        # ========================================================
+        # SAVE NEW OWNER ROLE
+        # ========================================================
+
+        set_owner_role(
+            ctx.guild.id,
+            role.id
+        )
+
+
+        # ========================================================
+        # SUCCESS MESSAGE
+        # ========================================================
+
+        if current_role_id is None:
+
+            await ctx.send(
+                f"🔻 👑 {role.mention} is now the "
+                "**Owner Role**.\n\n"
+                "Members with this role can use the "
+                "commands configured for the Owner Role."
+            )
+
+            return
+
+
+        # ========================================================
+        # FIND OLD ROLE
+        # ========================================================
+
+        old_role = ctx.guild.get_role(
+            current_role_id
+        )
+
+
+        if old_role is not None:
+
+            old_role_text = old_role.mention
+
+        else:
+
+            old_role_text = f"`{current_role_id}`"
+
+
+        # ========================================================
+        # UPDATED
+        # ========================================================
+
+        await ctx.send(
+            "🔻 👑 **Owner Role updated.**\n\n"
+            f"**Old:** {old_role_text}\n"
+            f"**New:** {role.mention}"
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        SignOwnerModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\slowmode.py 
+============================================================ 
+import discord
+
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+class SlowmodeModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        manage_channels=True
+    )
+    async def slowmode(
+        self,
+        ctx,
+        value: str
+    ):
+
+        # ========================================================
+        # PARSE VALUE
+        # ========================================================
+
+        value = value.lower().strip()
+
+        if value == "off":
+
+            seconds = 0
+
+        else:
+
+            try:
+
+                seconds = int(value)
+
+            except ValueError:
+
+                await ctx.send(
+                    "🔻 ❌ Please enter a number of "
+                    "seconds or `off`."
+                )
+
+                return
+
+        # ========================================================
+        # VALIDATE
+        # ========================================================
+
+        if seconds < 0:
+
+            await ctx.send(
+                "🔻 ❌ Slowmode cannot be negative."
+            )
+
+            return
+
+        if seconds > 21600:
+
+            await ctx.send(
+                "🔻 ❌ Slowmode cannot exceed "
+                "21600 seconds."
+            )
+
+            return
+
+        # ========================================================
+        # CHANGE SLOWMODE
+        # ========================================================
+
+        try:
+
+            await ctx.channel.edit(
+                slowmode_delay=seconds,
+                reason=(
+                    f"Slowmode changed by {ctx.author}"
+                )
+            )
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to change slowmode."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ An error occurred while "
+                "changing slowmode."
+            )
+
+            return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog(
+            "ModLogModule"
+        )
+
+        if logger:
+
+            if seconds == 0:
+
+                details = (
+                    f"Channel: {ctx.channel.mention}\n"
+                    "Slowmode disabled."
+                )
+
+            else:
+
+                details = (
+                    f"Channel: {ctx.channel.mention}\n"
+                    f"Slowmode: `{seconds}` second(s)."
+                )
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="slowmode",
+                moderator=ctx.author,
+                details=details
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        if seconds == 0:
+
+            await ctx.send(
+                "🔻 🔓 Slowmode has been disabled."
+            )
+
+            return
+
+        await ctx.send(
+            f"🔻 🐢 Slowmode has been set to "
+            f"`{seconds}` second(s)."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        SlowmodeModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\timeout.py 
+============================================================ 
+import re
+import discord
+
+from datetime import timedelta
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+def parse_time(value: str):
+
+    value = value.lower().strip()
+
+    match = re.fullmatch(
+        r"(\d+)\s*(m|minute|minutes)",
+        value
+    )
+
+    if not match:
+        return None
+
+    minutes = int(
+        match.group(1)
+    )
+
+    if minutes <= 0:
+        return None
+
+    return timedelta(
+        minutes=minutes
+    )
+
+
+class TimeoutModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        moderate_members=True
+    )
+    async def timeout(
+        self,
+        ctx,
+        member: discord.Member,
+        duration: str,
+        *,
+        reason="No reason provided"
+    ):
+
+        # ========================================================
+        # PARSE TIME
+        # ========================================================
+
+        timeout_duration = parse_time(
+            duration
+        )
+
+        if timeout_duration is None:
+
+            await ctx.send(
+                "🔻 ❌ Invalid time format.\n"
+                "🔻 📌 Examples: `1m`, `2m`, "
+                "`1minute`, `2minutes`"
+            )
+
+            return
+
+        # ========================================================
+        # PREVENT SELF TIMEOUT
+        # ========================================================
+
+        if member == ctx.author:
+
+            await ctx.send(
+                "🔻 ❌ You cannot timeout yourself."
+            )
+
+            return
+
+        # ========================================================
+        # SERVER OWNER
+        # ========================================================
+
+        if member == ctx.guild.owner:
+
+            await ctx.send(
+                "🔻 ❌ You cannot timeout the server owner."
+            )
+
+            return
+
+        # ========================================================
+        # MODERATOR ROLE HIERARCHY
+        # ========================================================
+
+        if (
+            ctx.author != ctx.guild.owner
+            and member.top_role >= ctx.author.top_role
+        ):
+
+            await ctx.send(
+                "🔻 ❌ You cannot timeout a member "
+                "with an equal or higher role."
+            )
+
+            return
+
+        # ========================================================
+        # BOT ROLE HIERARCHY
+        # ========================================================
+
+        if member.top_role >= ctx.guild.me.top_role:
+
+            await ctx.send(
+                "🔻 ❌ My role is not high enough "
+                "to timeout this member."
+            )
+
+            return
+
+        # ========================================================
+        # TIMEOUT UNTIL
+        # ========================================================
+
+        timeout_until = (
+            discord.utils.utcnow()
+            + timeout_duration
+        )
+
+        minutes = int(
+            timeout_duration.total_seconds() / 60
+        )
+
+        # ========================================================
+        # APPLY TIMEOUT
+        # ========================================================
+
+        try:
+
+            await member.edit(
+                timed_out_until=timeout_until,
+                reason=(
+                    f"{reason} | "
+                    f"Moderated by {ctx.author}"
+                )
+            )
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to timeout this member."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ An error occurred while trying "
+                "to timeout this member."
+            )
+
+            return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog("ModLogModule")
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="timeout",
+                target=member,
+                moderator=ctx.author,
+                reason=reason,
+                details=(
+                    f"Duration: `{minutes} minute(s)`\n"
+                    f"Until: <t:{int(timeout_until.timestamp())}:F>"
+                )
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 ✅ {member.mention} has been timed out.\n"
+            f"🔻 ⏱️ Duration: `{minutes} minute(s)`\n"
+            f"🔻 📝 Reason: {reason}"
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        TimeoutModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\timeoutlist.py 
+============================================================ 
+from permissions import signed_permission
+import math
+import discord
+
+from discord.ext import commands
+
+
+class TimeoutListView(discord.ui.View):
+
+    def __init__(self, pages):
+        super().__init__(timeout=120)
+
+        self.pages = pages
+        self.current_page = 0
+
+        self.update_buttons()
+
+
+    def update_buttons(self):
+
+        self.previous_button.disabled = (
+            self.current_page == 0
+        )
+
+        self.next_button.disabled = (
+            self.current_page >= len(self.pages) - 1
+        )
+
+
+    @discord.ui.button(
+        label="⬅️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def previous_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        self.current_page -= 1
+
+        self.update_buttons()
+
+        await interaction.response.edit_message(
+            content=self.pages[self.current_page],
+            view=self
+        )
+
+
+    @discord.ui.button(
+        label="➡️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def next_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        self.current_page += 1
+
+        self.update_buttons()
+
+        await interaction.response.edit_message(
+            content=self.pages[self.current_page],
+            view=self
+        )
+
+
+class TimeoutListModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    @signed_permission()
+    async def timeoutlist(self, ctx):
+
+        timed_out_members = [
+
+            member
+
+            for member in ctx.guild.members
+
+            if member.is_timed_out()
+
+        ]
+
+
+        if not timed_out_members:
+
+            await ctx.send(
+                "🔻 📋 There are no timed out members."
+            )
+
+            return
+
+
+        per_page = 10
+
+        pages = []
+
+        total_pages = math.ceil(
+            len(timed_out_members) / per_page
+        )
+
+
+        for page in range(total_pages):
+
+            start = page * per_page
+
+            end = start + per_page
+
+            members = timed_out_members[start:end]
+
+
+            content = (
+                f"🔻 📋 **Timeout List — "
+                f"Page {page + 1}/{total_pages}**\n\n"
+            )
+
+
+            for index, member in enumerate(
+                members,
+                start=start + 1
+            ):
+
+                timeout_until = member.timed_out_until
+
+                timestamp = int(
+                    timeout_until.timestamp()
+                )
+
+
+                content += (
+                    f"🔻 `{index}.` {member.mention}\n"
+                    f"🔻 ⏱️ Until: <t:{timestamp}:R>\n\n"
+                )
+
+
+            pages.append(content)
+
+
+        view = TimeoutListView(pages)
+
+        await ctx.send(
+            pages[0],
+            view=view
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        TimeoutListModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\unban.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+class UnbanModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(ban_members=True)
+    async def unban(
+        self,
+        ctx,
+        user_id: int
+    ):
+
+        # ========================================================
+        # FETCH USER
+        # ========================================================
+
+        try:
+
+            user = await self.bot.fetch_user(
+                user_id
+            )
+
+        except discord.NotFound:
+
+            await ctx.send(
+                "🔻 ❌ User not found."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ Failed to fetch this user."
+            )
+
+            return
+
+        # ========================================================
+        # CHECK BAN
+        # ========================================================
+
+        try:
+
+            ban_entry = await ctx.guild.fetch_ban(
+                user
+            )
+
+        except discord.NotFound:
+
+            await ctx.send(
+                "🔻 ❌ This user is not banned."
+            )
+
+            return
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to view the ban list."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ Failed to check the ban list."
+            )
+
+            return
+
+        # ========================================================
+        # UNBAN
+        # ========================================================
+
+        try:
+
+            await ctx.guild.unban(
+                ban_entry.user,
+                reason=f"Unbanned by {ctx.author}"
+            )
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to unban users."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ An error occurred while trying "
+                "to unban this user."
+            )
+
+            return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog("ModLogModule")
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="unban",
+                target=ban_entry.user,
+                moderator=ctx.author,
+                reason="User unbanned."
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 ✅ {ban_entry.user.mention} has been unbanned."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        UnbanModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\unlock.py 
+============================================================ 
+from permissions import signed_permission
+import discord
+from discord.ext import commands
+
+
+class UnlockModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        manage_channels=True
+    )
+    async def unlock(
+        self,
+        ctx
+    ):
+
+        overwrite = ctx.channel.overwrites_for(
+            ctx.guild.default_role
+        )
+
+        overwrite.send_messages = None
+
+
+        await ctx.channel.set_permissions(
+            ctx.guild.default_role,
+            overwrite=overwrite,
+            reason=(
+                f"Channel unlocked by {ctx.author}"
+            )
+        )
+
+
+        await ctx.send(
+            "🔻 🔓 This channel has been unlocked."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        UnlockModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\unmodlog.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from database import (
+    is_modlog_channel,
+    remove_modlog_channel,
+    clear_disabled_modlog_commands,
+)
+
+
+class UnModLogModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @staticmethod
+    def bot_message(text):
+        return f"🔻 {text}"
+
+    @commands.command(
+        name="unmodlog"
+    )
+    @commands.guild_only()
+    async def unmodlog(
+        self,
+        ctx,
+        channel: discord.TextChannel
+    ):
+
+        if not is_modlog_channel(
+            ctx.guild.id,
+            channel.id
+        ):
+
+            await ctx.send(
+                self.bot_message(
+                    f"{channel.mention} does not have "
+                    "ModLog enabled."
+                )
+            )
+
+            return
+
+        remove_modlog_channel(
+            ctx.guild.id,
+            channel.id
+        )
+
+        clear_disabled_modlog_commands(
+            ctx.guild.id,
+            channel.id
+        )
+
+        await ctx.send(
+            self.bot_message(
+                f"ModLog has been disabled in "
+                f"{channel.mention}."
+            )
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        UnModLogModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\unsign.py 
+============================================================ 
+import discord
+from discord.ext import commands
+
+from database import get_connection
+from permissions import permission_admin
+
+
+class UnsignModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    # ========================================================
+    # UNSIGN
+    # ========================================================
+
+    @commands.command()
+    @permission_admin()
+    async def unsign(
+        self,
+        ctx,
+        role: discord.Role,
+        command_name: str
+    ):
+
+        # ====================================================
+        # ROLE HIERARCHY
+        # ====================================================
+
+        if not ctx.guild:
+            return
+
+        is_server_owner = (
+            ctx.author.id == ctx.guild.owner_id
+        )
+
+        if not is_server_owner:
+
+            if role >= ctx.author.top_role:
+
+                await ctx.send(
+                    "🔻 ❌ You can only manage roles "
+                    "below your highest role."
+                )
+
+                return
+
+        # ====================================================
+        # NORMALIZE COMMAND NAME
+        # ====================================================
+
+        command_name = command_name.lower().strip()
+
+        # Remove "du" prefix.
+
+        if command_name != "all":
+
+            if command_name.startswith("du"):
+
+                command_name = command_name[2:]
+
+        # ====================================================
+        # EMPTY COMMAND CHECK
+        # ====================================================
+
+        if not command_name:
+
+            await ctx.send(
+                "🔻 ❌ You must specify a command."
+            )
+
+            return
+
+        # ====================================================
+        # DUSIGNOWNER CANNOT BE MODIFIED
+        # ====================================================
+
+        if command_name == "signowner":
+
+            await ctx.send(
+                "🔻 ❌ `dusignowner` cannot be modified."
+            )
+
+            return
+
+        # ====================================================
+        # DATABASE
+        # ====================================================
+
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        # ====================================================
+        # DELETE PERMISSION
+        # ====================================================
+
+        cursor.execute(
+            """
+            DELETE FROM command_permissions
+            WHERE guild_id = ?
+            AND role_id = ?
+            AND command_name = ?
+            """,
+            (
+                ctx.guild.id,
+                role.id,
+                command_name
+            )
+        )
+
+        deleted = cursor.rowcount
+
+        connection.commit()
+        connection.close()
+
+        # ====================================================
+        # NOT FOUND
+        # ====================================================
+
+        if deleted == 0:
+
+            await ctx.send(
+                f"🔻 ❌ {role.mention} is not signed "
+                f"for `{command_name}`."
+            )
+
+            return
+
+        # ====================================================
+        # SUCCESS
+        # ====================================================
+
+        if command_name == "all":
+
+            await ctx.send(
+                f"🔻 ✅ Removed all signed permissions "
+                f"from {role.mention}."
+            )
+
+        else:
+
+            await ctx.send(
+                f"🔻 ✅ {role.mention} can no longer use "
+                f"`du{command_name}`."
+            )
+
+
+# ============================================================
+# SETUP
+# ============================================================
+
+async def setup(bot):
+
+    await bot.add_cog(
+        UnsignModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\untimeout.py 
+============================================================ 
+import discord
+
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+class UnTimeoutModule(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @signed_permission()
+    @commands.bot_has_permissions(
+        moderate_members=True
+    )
+    async def untimeout(
+        self,
+        ctx,
+        member: discord.Member
+    ):
+
+        # ========================================================
+        # PREVENT SELF UNTIMEOUT
+        # ========================================================
+
+        if member == ctx.author:
+
+            await ctx.send(
+                "🔻 ❌ You cannot remove your own timeout."
+            )
+
+            return
+
+        # ========================================================
+        # CHECK TIMEOUT
+        # ========================================================
+
+        if not member.is_timed_out():
+
+            await ctx.send(
+                f"🔻 ⚠️ {member.mention} is not timed out."
+            )
+
+            return
+
+        # ========================================================
+        # ROLE HIERARCHY
+        # ========================================================
+
+        if (
+            ctx.author != ctx.guild.owner
+            and member.top_role >= ctx.author.top_role
+        ):
+
+            await ctx.send(
+                "🔻 ❌ You cannot moderate a member "
+                "with an equal or higher role."
+            )
+
+            return
+
+        # ========================================================
+        # REMOVE TIMEOUT
+        # ========================================================
+
+        try:
+
+            await member.edit(
+                timed_out_until=None,
+                reason=f"Timeout removed by {ctx.author}"
+            )
+
+        except discord.Forbidden:
+
+            await ctx.send(
+                "🔻 ❌ I do not have permission "
+                "to remove this timeout."
+            )
+
+            return
+
+        except discord.HTTPException:
+
+            await ctx.send(
+                "🔻 ❌ An error occurred while trying "
+                "to remove the timeout."
+            )
+
+            return
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog("ModLogModule")
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="untimeout",
+                target=member,
+                moderator=ctx.author,
+                reason="Timeout removed."
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 ✅ Timeout removed from {member.mention}."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        UnTimeoutModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\unwarn.py 
+============================================================ 
+import os
+import sqlite3
+import discord
+
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+DATABASE = "data/smf.db"
+
+
+def initialize_database():
+
+    os.makedirs(
+        "data",
+        exist_ok=True
+    )
+
+    connection = sqlite3.connect(
+        DATABASE
+    )
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS warnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
+
+    connection.commit()
+    connection.close()
+
+
+class UnwarnModule(commands.Cog):
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+        initialize_database()
+
+    @commands.command()
+    @signed_permission()
+    async def unwarn(
+        self,
+        ctx,
+        warning_id: int
+    ):
+
+        # ========================================================
+        # GET WARNING
+        # ========================================================
+
+        connection = sqlite3.connect(
+            DATABASE
+        )
+
+        connection.row_factory = sqlite3.Row
+
+        try:
+
+            cursor = connection.cursor()
+
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    user_id,
+                    moderator_id,
+                    reason,
+                    created_at
+                FROM warnings
+                WHERE id = ?
+                AND guild_id = ?
+                """,
+                (
+                    warning_id,
+                    ctx.guild.id
+                )
+            )
+
+            warning = cursor.fetchone()
+
+            if warning is None:
+
+                await ctx.send(
+                    "🔻 ❌ Warning not found."
+                )
+
+                return
+
+            # ====================================================
+            # DELETE WARNING
+            # ====================================================
+
+            cursor.execute(
+                """
+                DELETE FROM warnings
+                WHERE id = ?
+                AND guild_id = ?
+                """,
+                (
+                    warning_id,
+                    ctx.guild.id
+                )
+            )
+
+            connection.commit()
+
+        finally:
+
+            connection.close()
+
+        # ========================================================
+        # FIND MEMBER
+        # ========================================================
+
+        member = ctx.guild.get_member(
+            warning["user_id"]
+        )
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog(
+            "ModLogModule"
+        )
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="unwarn",
+                target=member,
+                moderator=ctx.author,
+                details=(
+                    f"Warning ID: `{warning_id}`\n"
+                    f"Original reason: {warning['reason']}"
+                )
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 ✅ Warning `{warning_id}` has been removed."
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        UnwarnModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\warn.py 
+============================================================ 
+import os
+import sqlite3
+import discord
+
+from datetime import datetime, timezone
+from discord.ext import commands
+
+from permissions import signed_permission
+
+
+DATABASE = "data/smf.db"
+
+
+def initialize_database():
+
+    os.makedirs(
+        "data",
+        exist_ok=True
+    )
+
+    connection = sqlite3.connect(
+        DATABASE
+    )
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS warnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
+
+    connection.commit()
+    connection.close()
+
+
+class WarnModule(commands.Cog):
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+        initialize_database()
+
+    @commands.command()
+    @signed_permission()
+    async def warn(
+        self,
+        ctx,
+        member: discord.Member,
+        *,
+        reason="No reason provided"
+    ):
+
+        # ========================================================
+        # PREVENT SELF WARN
+        # ========================================================
+
+        if member == ctx.author:
+
+            await ctx.send(
+                "🔻 ❌ You cannot warn yourself."
+            )
+
+            return
+
+        # ========================================================
+        # SERVER OWNER
+        # ========================================================
+
+        if member == ctx.guild.owner:
+
+            await ctx.send(
+                "🔻 ❌ You cannot warn the server owner."
+            )
+
+            return
+
+        # ========================================================
+        # MODERATOR ROLE HIERARCHY
+        # ========================================================
+
+        if (
+            ctx.author != ctx.guild.owner
+            and member.top_role >= ctx.author.top_role
+        ):
+
+            await ctx.send(
+                "🔻 ❌ You cannot warn a member "
+                "with an equal or higher role."
+            )
+
+            return
+
+        # ========================================================
+        # BOT ROLE HIERARCHY
+        # ========================================================
+
+        if member.top_role >= ctx.guild.me.top_role:
+
+            await ctx.send(
+                "🔻 ❌ My role is not high enough "
+                "to moderate this member."
+            )
+
+            return
+
+        # ========================================================
+        # TIMESTAMP
+        # ========================================================
+
+        created_at = int(
+            datetime.now(
+                timezone.utc
+            ).timestamp()
+        )
+
+        # ========================================================
+        # INSERT WARNING
+        # ========================================================
+
+        connection = sqlite3.connect(
+            DATABASE
+        )
+
+        try:
+
+            cursor = connection.cursor()
+
+            cursor.execute(
+                """
+                INSERT INTO warnings (
+                    guild_id,
+                    user_id,
+                    moderator_id,
+                    reason,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    ctx.guild.id,
+                    member.id,
+                    ctx.author.id,
+                    reason,
+                    created_at
+                )
+            )
+
+            warning_id = cursor.lastrowid
+
+            connection.commit()
+
+        finally:
+
+            connection.close()
+
+        # ========================================================
+        # MODLOG
+        # ========================================================
+
+        logger = self.bot.get_cog(
+            "ModLogModule"
+        )
+
+        if logger:
+
+            await logger.log_action(
+                guild=ctx.guild,
+                action="warn",
+                target=member,
+                moderator=ctx.author,
+                reason=reason,
+                details=f"Warning ID: `{warning_id}`"
+            )
+
+        # ========================================================
+        # CONFIRMATION
+        # ========================================================
+
+        await ctx.send(
+            f"🔻 ⚠️ {member.mention} has received a warning.\n"
+            f"🔻 🆔 Warning ID: `{warning_id}`\n"
+            f"🔻 📝 Reason: {reason}\n"
+            f"🔻 ⏱️ Issued: <t:{created_at}:R>"
+        )
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        WarnModule(bot)
+    ).
+============================================================ 
+FILE: D:\SMF\modules\moderation\warnlist.py 
+============================================================ 
+from permissions import signed_permission
+import discord
+from discord.ext import commands
+
+from database import get_connection
+
+
+class WarnListModule(commands.Cog):
+
+    def __init__(self, bot):
+
+        self.bot = bot
+
+
+    @commands.command()
+    @signed_permission()
+    async def warnlist(
+        self,
+        ctx,
+        member: discord.Member
+    ):
+
+        connection = get_connection()
+
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                moderator_id,
+                reason,
+                created_at
+
+            FROM warnings
+
+            WHERE guild_id = ?
+            AND user_id = ?
+
+            ORDER BY id DESC
+            """,
+            (
+                ctx.guild.id,
+                member.id
+            )
+        )
+
+        warnings = cursor.fetchall()
+
+        connection.close()
+
+
+        if not warnings:
+
+            await ctx.send(
+                f"🔻 📋 {member.mention} has no warnings."
+            )
+
+            return
+
+
+        content = (
+            f"🔻 📋 **Warnings for {member}**\n\n"
+        )
+
+
+        for warning in warnings:
+
+            warning_id = warning[0]
+            moderator_id = warning[1]
+            reason = warning[2]
+            created_at = warning[3]
+
+
+            content += (
+                f"🔻 ⚠️ Warning ID: `{warning_id}`\n"
+                f"🔻 📝 Reason: {reason}\n"
+                f"🔻 👤 Moderator: <@{moderator_id}>\n"
+                f"🔻 ⏱️ Issued: <t:{created_at}:R>\n\n"
+            )
+
+
+        # Prevent exceeding Discord's message limit
+        if len(content) > 1900:
+
+            content = (
+                content[:1900]
+                + "\n🔻 ⚠️ List truncated."
+            )
+
+
+        await ctx.send(content)
+
+
+async def setup(bot):
+
+    await bot.add_cog(
+        WarnListModule(bot)
+    ).
